@@ -1,6 +1,7 @@
-use crate::{cli::ServerConfig, spell::Spell, tx::spell_and_proof};
+use crate::{cli::ServerConfig, spell::Spell, tx::tx_to_spell};
 use anyhow::Result;
-use axum::{http::StatusCode, routing::get, Json, Router};
+use axum::{extract::Path, http::StatusCode, routing::get, Json, Router};
+use bitcoin::Transaction;
 use bitcoincore_rpc::{Auth, Client, RpcApi};
 use serde::{Deserialize, Serialize};
 use std::{str::FromStr, sync::OnceLock};
@@ -37,7 +38,7 @@ pub async fn server(
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    RPC.set(bitcoind_client(rpc_url, rpc_user, rpc_password))
+    RPC.set(bitcoind_rpc_client(rpc_url, rpc_user, rpc_password))
         .expect("Should set RPC client");
 
     // Build router
@@ -53,13 +54,11 @@ pub async fn server(
 }
 
 // Handlers
-async fn get_item(
-    axum::extract::Path(txid): axum::extract::Path<String>,
-) -> Result<Json<Spell>, StatusCode> {
+async fn get_item(Path(txid): Path<String>) -> Result<Json<Spell>, StatusCode> {
     get_spell(&txid).map(Json).ok_or(StatusCode::NOT_FOUND)
 }
 
-fn bitcoind_client(rpc_url: String, rpc_user: String, rpc_password: String) -> Client {
+pub fn bitcoind_rpc_client(rpc_url: String, rpc_user: String, rpc_password: String) -> Client {
     Client::new(
         &rpc_url,
         Auth::UserPass(rpc_user.clone(), rpc_password.clone()),
@@ -70,15 +69,13 @@ fn bitcoind_client(rpc_url: String, rpc_user: String, rpc_password: String) -> C
 fn get_spell(txid: &str) -> Option<Spell> {
     let txid = bitcoin::Txid::from_str(txid).ok()?;
 
-    let rpc = RPC.get().expect("RPC client should be initialized by now");
-    match rpc.get_raw_transaction(&txid, None) {
-        Ok(tx) => match spell_and_proof(&tx) {
-            None => None,
-            Some((s, _)) => Some(Spell::denormalized(&s)),
-        },
-        Err(e) => {
+    let rpc_client = RPC.get().expect("RPC client should be initialized by now");
+    let tx_opt = rpc_client
+        .get_raw_transaction(&txid, None)
+        .map_err(|e| {
             eprintln!("Error fetching transaction: {}", e);
-            None
-        }
-    }
+            e
+        })
+        .ok();
+    tx_to_spell(tx_opt)
 }

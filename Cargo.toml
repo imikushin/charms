@@ -42,6 +42,7 @@ proptest-derive = { workspace = true }
 members = [
     ".",
     "charms-client",
+    "charms-client-wasm",
     "charms-data",
     "charms-sdk",
     "charms-spell-checker",

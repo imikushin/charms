@@ -1229,6 +1229,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "charms-client-wasm"
+version = "0.4.0"
+dependencies = [
+ "charms-client",
+ "charms-data",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "charms-data"
 version = "0.4.0"
 dependencies = [

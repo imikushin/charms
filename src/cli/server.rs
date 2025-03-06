@@ -1,65 +1,86 @@
-use crate::{cli::ServerConfig, spell::Spell, tx::norm_spell};
+use crate::{
+    cli::ServerConfig,
+    spell::{ProveRequest, ProveSpellTx, Prover},
+    utils::AsyncShared,
+};
+#[cfg(not(feature = "prover"))]
+use crate::{spell::Spell, tx::norm_spell};
 use anyhow::Result;
 use axum::{
     body::Body,
-    extract::Path,
+    extract::State,
     http::{header, HeaderValue, StatusCode},
     middleware::{self, Next},
     response::Response,
-    routing::MethodRouter,
+    routing::{get, post},
     Json, Router,
 };
-use bitcoin::{consensus::encode::deserialize_hex, Transaction};
+#[cfg(not(feature = "prover"))]
+use axum::{extract::Path, routing::put};
+#[cfg(not(feature = "prover"))]
+use bitcoin::consensus::encode::deserialize_hex;
+use bitcoin::consensus::encode::serialize_hex;
+#[cfg(not(feature = "prover"))]
 use bitcoincore_rpc::{jsonrpc::Error::Rpc, Auth, Client, RpcApi};
 use serde::{Deserialize, Serialize};
-use std::{str::FromStr, sync::OnceLock};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+#[cfg(not(feature = "prover"))]
+use std::str::FromStr;
+use std::sync::Arc;
+
+pub struct Server {
+    pub config: ServerConfig,
+    #[cfg(not(feature = "prover"))]
+    pub rpc: Arc<Client>,
+    pub prover: Arc<AsyncShared<Prover>>,
+}
 
 // Types
 #[derive(Debug, Serialize, Deserialize)]
-struct DecodeSpell {
+struct ShowSpellRequest {
     tx_hex: String,
 }
 
-static RPC: OnceLock<Client> = OnceLock::new();
+impl Server {
+    pub fn new(config: ServerConfig, prover: AsyncShared<Prover>) -> Self {
+        #[cfg(not(feature = "prover"))]
+        let rpc = Arc::new(bitcoind_client(
+            config.rpc_url.clone(),
+            config.rpc_user.clone(),
+            config.rpc_password.clone(),
+        ));
+        let prover = Arc::new(prover);
+        Self {
+            config,
+            #[cfg(not(feature = "prover"))]
+            rpc,
+            prover,
+        }
+    }
 
-pub async fn server(
-    ServerConfig {
-        ip_addr,
-        port,
-        rpc_url,
-        rpc_user,
-        rpc_password,
-    }: ServerConfig,
-) -> Result<()> {
-    // Initialize tracing
-    tracing_subscriber::registry()
-        .with(tracing_subscriber::EnvFilter::new(
-            std::env::var("RUST_LOG").unwrap_or_else(|_| "info".into()),
-        ))
-        .with(tracing_subscriber::fmt::layer())
-        .init();
+    pub async fn serve(&self) -> Result<()> {
+        let ServerConfig { ip, port, .. } = &self.config;
 
-    RPC.set(bitcoind_client(rpc_url, rpc_user, rpc_password))
-        .expect("Should set RPC client");
+        // Build router with CORS middleware
+        let app = Router::new();
+        #[cfg(not(feature = "prover"))]
+        let app = app
+            .route("/spells/{txid}", get(show_spell_by_txid))
+            .with_state(self.rpc.clone())
+            .route("/spells/{txid}", put(show_spell_for_tx_hex));
+        let app = app
+            .route("/spells/prove", post(prove_spell))
+            .with_state(self.prover.clone())
+            .route("/ready", get(|| async { "OK" }))
+            .layer(middleware::from_fn(cors_middleware));
 
-    // Build router with CORS middleware
-    let app = Router::new()
-        .route(
-            "/spells/{txid}",
-            MethodRouter::new()
-                .get(get_spell_handler)
-                .put(put_spell_handler),
-        )
-        .layer(middleware::from_fn(cors_middleware));
+        // Run server
+        let addr = format!("{}:{}", ip, port);
+        let listener = tokio::net::TcpListener::bind(&addr).await?;
+        tracing::info!("Server running on {}", &addr);
 
-    // Run server
-    let addr = format!("{}:{}", ip_addr, port);
-    let listener = tokio::net::TcpListener::bind(&addr).await?;
-    tracing::info!("Server running on {}", &addr);
-
-    axum::serve(listener, app).await?;
-    Ok(())
+        axum::serve(listener, app).await?;
+        Ok(())
+    }
 }
 
 async fn cors_middleware(request: axum::http::Request<Body>, next: Next) -> Response {
@@ -83,17 +104,37 @@ async fn cors_middleware(request: axum::http::Request<Body>, next: Next) -> Resp
 }
 
 // Handlers
-async fn get_spell_handler(Path(txid): Path<String>) -> Result<Json<Spell>, StatusCode> {
-    get_spell(&txid).map(Json)
-}
-
-async fn put_spell_handler(
+#[cfg(not(feature = "prover"))]
+async fn show_spell_by_txid(
+    State(rpc): State<Arc<Client>>,
     Path(txid): Path<String>,
-    Json(payload): Json<DecodeSpell>,
 ) -> Result<Json<Spell>, StatusCode> {
-    decode_spell(&txid, &payload).map(Json)
+    get_spell(rpc, &txid).map(Json)
 }
 
+#[cfg(not(feature = "prover"))]
+async fn show_spell_for_tx_hex(
+    Path(txid): Path<String>,
+    Json(payload): Json<ShowSpellRequest>,
+) -> Result<Json<Spell>, StatusCode> {
+    show_spell(&txid, &payload).map(Json)
+}
+
+async fn prove_spell(
+    State(prover): State<Arc<AsyncShared<Prover>>>,
+    Json(payload): Json<ProveRequest>,
+) -> Result<Json<[String; 2]>, StatusCode> {
+    let result = prover
+        .get()
+        .await
+        .prove_spell_tx(payload)
+        .await
+        .map(|[tx0, tx1]| [serialize_hex(&tx0), serialize_hex(&tx1)])
+        .map_err(|_| StatusCode::BAD_REQUEST)?;
+    Ok(Json(result))
+}
+
+#[cfg(not(feature = "prover"))]
 fn bitcoind_client(rpc_url: String, rpc_user: String, rpc_password: String) -> Client {
     Client::new(
         &rpc_url,
@@ -102,10 +143,10 @@ fn bitcoind_client(rpc_url: String, rpc_user: String, rpc_password: String) -> C
     .expect("Should create RPC client")
 }
 
-fn get_spell(txid: &str) -> Result<Spell, StatusCode> {
+#[cfg(not(feature = "prover"))]
+fn get_spell(rpc: Arc<Client>, txid: &str) -> Result<Spell, StatusCode> {
     let txid = bitcoin::Txid::from_str(txid).map_err(|_| StatusCode::BAD_REQUEST)?;
 
-    let rpc = RPC.get().expect("RPC client should be initialized by now");
     match rpc.get_raw_transaction(&txid, None) {
         Ok(tx) => extract_spell(&tx),
         Err(e) => match e {
@@ -120,16 +161,19 @@ fn get_spell(txid: &str) -> Result<Spell, StatusCode> {
     }
 }
 
-fn decode_spell(txid: &str, request: &DecodeSpell) -> Result<Spell, StatusCode> {
+#[cfg(not(feature = "prover"))]
+fn show_spell(txid: &str, request: &ShowSpellRequest) -> Result<Spell, StatusCode> {
     let txid = bitcoin::Txid::from_str(txid).map_err(|_| StatusCode::BAD_REQUEST)?;
-    let tx: Transaction = deserialize_hex(&request.tx_hex).map_err(|_| StatusCode::BAD_REQUEST)?;
+    let tx: bitcoin::Transaction =
+        deserialize_hex(&request.tx_hex).map_err(|_| StatusCode::BAD_REQUEST)?;
     if tx.compute_txid() != txid {
         return Err(StatusCode::BAD_REQUEST);
     }
     extract_spell(&tx)
 }
 
-fn extract_spell(tx: &Transaction) -> Result<Spell, StatusCode> {
+#[cfg(not(feature = "prover"))]
+fn extract_spell(tx: &bitcoin::Transaction) -> Result<Spell, StatusCode> {
     match norm_spell(&tx) {
         None => Err(StatusCode::NO_CONTENT),
         Some(spell) => Ok(Spell::denormalized(&spell)),

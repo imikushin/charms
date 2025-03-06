@@ -1,4 +1,4 @@
-use crate::{app, app::Prover, spell::Spell};
+pub(crate) use crate::{app, app::Prover, spell::Spell};
 use anyhow::{anyhow, ensure, Result};
 use charms_data::{Data, B32};
 use std::{
@@ -137,6 +137,7 @@ fn data_for_key(inputs: &BTreeMap<String, Data>, k: &String) -> Data {
     }
 }
 
+#[tracing::instrument(level = "debug", skip(app_prover))]
 pub fn binaries_by_vk(
     app_prover: &Prover,
     app_bins: Vec<PathBuf>,

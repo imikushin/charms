@@ -65,6 +65,7 @@ pub struct NormalizedSpell {
 }
 
 /// Extract spells from previous transactions.
+#[tracing::instrument(level = "debug", skip(prev_txs, spell_vk))]
 pub fn prev_spells(
     prev_txs: &Vec<bitcoin::Transaction>,
     spell_vk: &str,
@@ -89,6 +90,7 @@ pub fn prev_spells(
 }
 
 /// Check if the spell is well-formed.
+#[tracing::instrument(level = "debug", skip(spell, prev_spells))]
 pub fn well_formed(
     spell: &NormalizedSpell,
     prev_spells: &BTreeMap<TxId, (Option<NormalizedSpell>, usize)>,

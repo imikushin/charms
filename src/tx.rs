@@ -34,9 +34,11 @@ pub fn add_spell(
     spell_data: &[u8],
     funding_out_point: OutPoint,
     funding_output_value: Amount,
-    change_script_pubkey: ScriptBuf,
+    change_pubkey: ScriptBuf,
     fee_rate: FeeRate,
     prev_txs: &BTreeMap<Txid, Transaction>,
+    charms_fee_pubkey: Option<ScriptBuf>,
+    charms_fee: Amount,
 ) -> [Transaction; 2] {
     let secp256k1 = Secp256k1::new();
     let keypair = Keypair::new(&secp256k1, &mut thread_rng());
@@ -53,31 +55,47 @@ pub fn add_spell(
     );
     let commit_txout = &commit_tx.output[0];
 
-    let tx_amount_in = tx_total_amount_in(prev_txs, &tx);
-    let change_amount = compute_change_amount(
-        fee_rate,
-        script.len(),
-        &tx,
-        tx_amount_in + commit_txout.value,
-    );
-
     let mut tx = tx;
+    if let Some(charms_fee_pubkey) = charms_fee_pubkey {
+        tx.output.push(TxOut {
+            value: charms_fee,
+            script_pubkey: charms_fee_pubkey,
+        });
+    }
+
+    let script_len = script.len();
+    let change_amount =
+        compute_change_amount(fee_rate, script_len, &tx, prev_txs, commit_txout.value);
+
     modify_tx(
         &mut tx,
         commit_tx.compute_txid(),
-        change_script_pubkey,
+        change_pubkey,
         change_amount,
     );
-    let spell_input = tx.input.len() - 1;
+    let spell_input_idx = tx.input.len() - 1;
 
-    let signature = create_tx_signature(keypair, &mut tx, spell_input, &commit_txout, &script);
+    let signature = create_tx_signature(keypair, &mut tx, spell_input_idx, &commit_txout, &script);
 
     append_witness_data(
-        &mut tx.input[spell_input].witness,
+        &mut tx.input[spell_input_idx].witness,
         public_key,
         script,
         signature,
     );
+
+    dbg!((
+        tx.input[0].witness.size(),
+        tx.input[0].base_size(),
+        tx.input[0].total_size()
+    ));
+    dbg!((
+        script_len,
+        tx.input[spell_input_idx].witness.size(),
+        tx.input[spell_input_idx].base_size(),
+        tx.input[spell_input_idx].total_size()
+    ));
+    dbg!(tx.output[tx.output.len() - 1].size());
 
     [commit_tx, tx]
 }
@@ -87,19 +105,24 @@ fn compute_change_amount(
     fee_rate: FeeRate,
     script_len: usize,
     tx: &Transaction,
-    total_amount_in: Amount,
+    prev_txs: &BTreeMap<Txid, Transaction>,
+    commit_txout_value: Amount,
 ) -> Amount {
-    // script input: (41 * 4) + (L + 99) = 164 + L + 99 = L + 263 wu
-    // change output: 42 * 4 = 168 wu
-    let added_weight =
-        Weight::from_witness_data_size(script_len as u64) + Weight::from_wu(263 + 168);
+    let script_input_weight = Weight::from_wu(script_len as u64 + 268);
+    let change_output_weight = Weight::from_wu(172);
+    let signatures_weight = Weight::from_wu(66) * tx.input.len() as u64;
 
-    let total_tx_weight = tx.weight() + added_weight;
-    let fee = fee_rate.fee_wu(total_tx_weight).unwrap();
+    let total_tx_weight = dbg!(tx.weight() + Weight::from_wu(2))
+        + dbg!(signatures_weight)
+        + dbg!(script_input_weight)
+        + dbg!(change_output_weight);
 
+    let fee = fee_rate.fee_wu(dbg!(total_tx_weight)).unwrap();
+
+    let tx_amount_in = tx_total_amount_in(prev_txs, &tx);
     let tx_amount_out = tx.output.iter().map(|tx_out| tx_out.value).sum::<Amount>();
 
-    total_amount_in - tx_amount_out - fee
+    commit_txout_value + tx_amount_in - tx_amount_out - fee
 }
 
 fn create_commit_tx(
@@ -146,13 +169,13 @@ fn modify_tx(
         sequence: Default::default(),
         witness: Witness::new(),
     });
-    tx.output.push(TxOut {
-        value: change_amount,
-        script_pubkey: change_script_pubkey,
-    });
 
+    // dust limit // TODO make a constant
     if change_amount >= Amount::from_sat(546) {
-        // dust limit
+        tx.output.push(TxOut {
+            value: change_amount,
+            script_pubkey: change_script_pubkey,
+        });
     }
 }
 
@@ -199,10 +222,12 @@ fn append_witness_data(
     witness.push(control_block(public_key, script).serialize());
 }
 
+#[tracing::instrument(level = "debug", skip_all)]
 pub fn norm_spell(tx: &Transaction) -> Option<NormalizedSpell> {
     charms_client::tx::extract_and_verify_spell(&tx, SPELL_VK).ok()
 }
 
+#[tracing::instrument(level = "debug", skip_all)]
 pub fn spell(tx: &Transaction) -> Option<Spell> {
     match norm_spell(tx) {
         Some(norm_spell) => Some(Spell::denormalized(&norm_spell)),
@@ -210,11 +235,11 @@ pub fn spell(tx: &Transaction) -> Option<Spell> {
     }
 }
 
-pub fn txs_by_txid(prev_txs: Vec<Transaction>) -> anyhow::Result<BTreeMap<Txid, Transaction>> {
+pub fn txs_by_txid(prev_txs: Vec<Transaction>) -> BTreeMap<Txid, Transaction> {
     prev_txs
         .into_iter()
-        .map(|prev_tx| Ok((prev_tx.compute_txid(), prev_tx)))
-        .collect::<anyhow::Result<BTreeMap<_, _>>>()
+        .map(|prev_tx| (prev_tx.compute_txid(), prev_tx))
+        .collect::<BTreeMap<_, _>>()
 }
 
 pub fn tx_total_amount_in(prev_txs: &BTreeMap<Txid, Transaction>, tx: &Transaction) -> Amount {
@@ -232,8 +257,13 @@ pub fn tx_total_amount_out(tx: &Transaction) -> Amount {
 pub fn tx_output(outs: &[Output]) -> Vec<TxOut> {
     outs.iter()
         .map(|u| {
-            let value = Amount::from_sat(u.sats.unwrap());
-            let address = u.address.as_ref().unwrap().clone().assume_checked();
+            let value = Amount::from_sat(u.sats.unwrap_or(1000)); // TODO make a constant
+            let address = u
+                .address
+                .as_ref()
+                .expect("address should be provided")
+                .clone()
+                .assume_checked();
             let script_pubkey = ScriptBuf::from(address.script_pubkey());
             TxOut {
                 value,

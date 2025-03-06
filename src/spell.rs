@@ -1,16 +1,29 @@
-use crate::{app, tx::add_spell, utils, SPELL_CHECKER_BINARY, SPELL_VK};
+use crate::{app, utils, utils::BoxedSP1Prover, SPELL_CHECKER_BINARY, SPELL_VK};
+#[cfg(feature = "prover")]
+use crate::{
+    tx,
+    tx::{add_spell, txs_by_txid},
+};
 use anyhow::{anyhow, ensure, Error};
-use bitcoin::{address::NetworkUnchecked, hashes::Hash, Address, Amount, FeeRate, OutPoint, Txid};
+#[cfg(not(feature = "prover"))]
+use bitcoin::consensus::encode::deserialize_hex;
+use bitcoin::{address::NetworkUnchecked, hashes::Hash, Address, OutPoint};
+#[cfg(feature = "prover")]
+use bitcoin::{Amount, FeeRate};
 pub use charms_client::{
     to_tx, NormalizedCharms, NormalizedSpell, NormalizedTransaction, Proof, SpellProverInput,
     CURRENT_VERSION,
 };
 use charms_data::{util, App, Charms, Data, Transaction, TxId, UtxoId, B32};
+#[cfg(not(feature = "prover"))]
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use sp1_sdk::{HashableKey, ProverClient, SP1Stdin};
+use sp1_sdk::{SP1ProofMode, SP1Stdin};
+#[cfg(feature = "prover")]
+use std::env;
 use std::{
     collections::{BTreeMap, BTreeSet},
-    str::FromStr,
+    sync::Arc,
 };
 
 /// Charm as represented in a spell.
@@ -78,7 +91,7 @@ impl Spell {
         }
     }
 
-    /// Get a [`charms_data::Transaction`] for the spell.
+    /// Get a [`Transaction`] for the spell.
     pub fn to_tx(&self) -> anyhow::Result<Transaction> {
         let ins = self.strings_of_charms(&self.ins)?;
         let empty_vec = vec![];
@@ -185,6 +198,7 @@ impl Spell {
     }
 
     /// De-normalize a normalized spell.
+    #[tracing::instrument(level = "debug", skip_all)]
     pub fn denormalized(norm_spell: &NormalizedSpell) -> Self {
         let apps = (0..)
             .zip(norm_spell.app_public_inputs.keys())
@@ -281,59 +295,89 @@ fn app_inputs(
         .collect()
 }
 
-/// Prove a spell (provided as [`NormalizedSpell`]).
-/// Returns the normalized spell and the proof (which is a Groth16 proof of checking if the spell is
-/// correct inside a zkVM).
-///
-/// Requires the binaries of the apps used in the spell, the private inputs to the apps, and the
-/// pre-requisite transactions (`prev_txs`).
-pub fn prove(
-    norm_spell: NormalizedSpell,
-    app_binaries: &BTreeMap<B32, Vec<u8>>,
-    app_private_inputs: BTreeMap<App, Data>,
-    prev_txs: Vec<bitcoin::Transaction>,
-) -> anyhow::Result<(NormalizedSpell, Proof)> {
-    let client = ProverClient::from_env();
-    let (pk, vk) = client.setup(SPELL_CHECKER_BINARY);
-    let mut stdin = SP1Stdin::new();
+pub trait Prove {
+    /// Prove a spell (provided as [`NormalizedSpell`]).
+    /// Returns the normalized spell and the proof (which is a Groth16 proof of checking if the
+    /// spell is correct inside a zkVM).
+    ///
+    /// Requires the binaries of the apps used in the spell, the private inputs to the apps, and the
+    /// pre-requisite transactions (`prev_txs`).
+    fn prove(
+        &self,
+        norm_spell: NormalizedSpell,
+        app_binaries: &BTreeMap<B32, Vec<u8>>,
+        app_private_inputs: BTreeMap<App, Data>,
+        prev_txs: Vec<bitcoin::Transaction>,
+        expected_cycles: Option<Vec<u64>>,
+    ) -> anyhow::Result<(NormalizedSpell, Proof, u64)>;
+}
 
-    let prev_spells = charms_client::prev_spells(&prev_txs, SPELL_VK);
+impl Prove for Prover {
+    fn prove(
+        &self,
+        norm_spell: NormalizedSpell,
+        app_binaries: &BTreeMap<B32, Vec<u8>>,
+        app_private_inputs: BTreeMap<App, Data>,
+        prev_txs: Vec<bitcoin::Transaction>,
+        expected_cycles: Option<Vec<u64>>,
+    ) -> anyhow::Result<(NormalizedSpell, Proof, u64)> {
+        let mut stdin = SP1Stdin::new();
 
-    let prover_input = SpellProverInput {
-        self_spell_vk: vk.bytes32(),
-        prev_txs,
-        spell: norm_spell.clone(),
-        app_contract_proofs: norm_spell
+        let prev_spells = charms_client::prev_spells(&prev_txs, SPELL_VK);
+
+        let app_contract_proofs = norm_spell
             .app_public_inputs
             .iter()
-            .zip(0..)
-            .filter_map(|((app, _), i)| (app_binaries.get(&app.vk).map(|_| i as usize)))
-            .collect(),
-    };
-    let input_vec: Vec<u8> = util::write(&prover_input)?;
+            .zip(0usize..)
+            .filter_map(|((app, _), i)| app_binaries.get(&app.vk).map(|_| i))
+            .collect();
+        let prover_input = SpellProverInput {
+            self_spell_vk: SPELL_VK.to_string(),
+            prev_txs,
+            spell: norm_spell.clone(),
+            app_contract_proofs,
+        };
+        let input_vec: Vec<u8> = util::write(&prover_input)?;
 
-    dbg!(input_vec.len());
+        dbg!(input_vec.len());
 
-    stdin.write_vec(input_vec);
+        stdin.write_vec(input_vec);
 
-    let tx = to_tx(&norm_spell, &prev_spells);
-    let app_public_inputs = &norm_spell.app_public_inputs;
+        let tx = to_tx(&norm_spell, &prev_spells);
+        let app_public_inputs = &norm_spell.app_public_inputs;
 
-    app::Prover::new().prove(
-        app_binaries,
-        tx,
-        app_public_inputs,
-        app_private_inputs,
-        &mut stdin,
-    )?;
+        // verify that apps execute within expected cycles
+        // TODO add a way to pass the expected cycles to the prover, remove this
+        if expected_cycles.is_some() {
+            self.app_prover.run_all(
+                app_binaries,
+                &tx,
+                app_public_inputs,
+                &app_private_inputs,
+                expected_cycles,
+            )?;
+        }
 
-    let proof = client.prove(&pk, &stdin).groth16().run()?;
-    let proof = proof.bytes().into_boxed_slice();
+        self.app_prover.prove(
+            app_binaries,
+            tx,
+            app_public_inputs,
+            app_private_inputs,
+            &mut stdin,
+        )?;
 
-    let mut norm_spell = norm_spell;
-    norm_spell.tx.ins = None;
+        let (pk, _) = self.sp1_client.setup(SPELL_CHECKER_BINARY);
+        // TODO find a way to get cycles count from the prover, remove this
+        let (_, report) = self.sp1_client.execute(SPELL_CHECKER_BINARY, &stdin)?;
 
-    Ok((norm_spell, proof))
+        let proof = self.sp1_client.prove(&pk, &stdin, SP1ProofMode::Groth16)?;
+        let proof = proof.bytes().into_boxed_slice();
+
+        let mut norm_spell2 = norm_spell;
+        norm_spell2.tx.ins = None;
+
+        Ok((norm_spell2, proof, report.total_instruction_count()))
+    }
 }
 
 #[cfg(test)]
@@ -362,51 +406,156 @@ $TOAD: 9
     }
 }
 
-pub fn prove_spell_tx(
-    spell: Spell,
-    tx: bitcoin::Transaction,
-    binaries: BTreeMap<B32, Vec<u8>>,
-    prev_txs: BTreeMap<Txid, bitcoin::Transaction>,
-    funding_utxo: OutPoint,
-    funding_utxo_value: u64,
-    change_address: String,
-    fee_rate: f64,
-) -> anyhow::Result<[bitcoin::Transaction; 2]> {
-    let (norm_spell, app_private_inputs) = spell.normalized()?;
-    let norm_spell = align_spell_to_tx(norm_spell, &tx)?;
-
-    let (norm_spell, proof) = prove(
-        norm_spell,
-        &binaries,
-        app_private_inputs,
-        prev_txs.values().cloned().collect(),
-    )?;
-
-    // Serialize spell into CBOR
-    let spell_data = util::write(&(&norm_spell, &proof))?;
-
-    // Parse change address into ScriptPubkey
-    let change_script_pubkey = bitcoin::Address::from_str(&change_address)?
-        .assume_checked()
-        .script_pubkey();
-
-    // Parse fee rate
-    let fee_rate = FeeRate::from_sat_per_kwu((fee_rate * 250.0) as u64);
-
-    // Call the add_spell function
-    let transactions = add_spell(
-        tx,
-        &spell_data,
-        funding_utxo,
-        Amount::from_sat(funding_utxo_value),
-        change_script_pubkey,
-        fee_rate,
-        &prev_txs,
-    );
-    Ok(transactions)
+pub trait ProveSpellTx {
+    fn prove_spell_tx(
+        &self,
+        prove_request: ProveRequest,
+    ) -> impl std::future::Future<Output = anyhow::Result<[bitcoin::Transaction; 2]>>;
 }
 
-pub(crate) fn align_spell_to_tx(
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ProveRequest {
+    pub spell: Spell,
+    pub binaries: BTreeMap<B32, Vec<u8>>,
+    pub prev_txs: Vec<bitcoin::Transaction>,
+    pub funding_utxo: OutPoint,
+    pub funding_utxo_value: u64,
+    pub change_address: Address<NetworkUnchecked>,
+    pub fee_rate: f64,
+}
+
+pub struct Prover {
+    pub app_prover: Arc<app::Prover>,
+    pub sp1_client: Arc<BoxedSP1Prover>,
+    pub charms_fee_address: Option<Address<NetworkUnchecked>>,
+    pub charms_prove_api_url: String,
+    #[cfg(not(feature = "prover"))]
+    pub client: Client,
+}
+
+impl ProveSpellTx for Prover {
+    #[cfg(feature = "prover")]
+    async fn prove_spell_tx(
+        &self,
+        ProveRequest {
+            spell,
+            binaries,
+            prev_txs,
+            funding_utxo,
+            funding_utxo_value,
+            change_address,
+            fee_rate,
+        }: ProveRequest,
+    ) -> anyhow::Result<[bitcoin::Transaction; 2]> {
+        let prev_txs_by_id = txs_by_txid(prev_txs.clone());
+
+        let tx = tx::from_spell(&spell);
+        ensure!(tx
+            .input
+            .iter()
+            .all(|input| prev_txs_by_id.contains_key(&input.previous_output.txid)));
+
+        let (norm_spell, app_private_inputs) = spell.normalized()?;
+
+        let prev_spells = charms_client::prev_spells(&prev_txs, SPELL_VK);
+        let charms_tx = to_tx(&norm_spell, &prev_spells);
+
+        let expected_cycles = self.app_prover.run_all(
+            &binaries,
+            &charms_tx,
+            &norm_spell.app_public_inputs,
+            &app_private_inputs,
+            None,
+        )?;
+        let total_app_cycles: u64 = expected_cycles.iter().sum();
+
+        let (norm_spell, proof, spell_cycles) = self.prove(
+            norm_spell,
+            &binaries,
+            app_private_inputs,
+            prev_txs.clone(),
+            Some(expected_cycles),
+        )?;
+
+        eprintln!(
+            "proof generated. total app cycles: {}, spell cycles: {}",
+            total_app_cycles, spell_cycles,
+        );
+
+        // Serialize spell into CBOR
+        let spell_data = util::write(&(&norm_spell, &proof))?;
+
+        // Parse change address into ScriptPubkey
+        let change_pubkey = change_address.assume_checked().script_pubkey();
+
+        let charms_fee_pubkey = self
+            .charms_fee_address
+            .clone()
+            .map(|addr| addr.assume_checked().script_pubkey());
+
+        // Calculate fee
+        let charms_fee = self
+            .charms_fee_address
+            .as_ref()
+            .map(|_| {
+                Amount::from_sat(
+                    (total_app_cycles + spell_cycles) * fee_sats_per_megacycle() / 1000000
+                        + fee_sats_base(),
+                )
+            })
+            .unwrap_or_default();
+
+        // Parse fee rate
+        let fee_rate = FeeRate::from_sat_per_kwu((fee_rate * 250.0) as u64);
+
+        // Call the add_spell function
+        let transactions = add_spell(
+            tx,
+            &spell_data,
+            funding_utxo,
+            Amount::from_sat(funding_utxo_value),
+            change_pubkey,
+            fee_rate,
+            &prev_txs_by_id,
+            charms_fee_pubkey,
+            charms_fee,
+        );
+        Ok(transactions)
+    }
+
+    #[cfg(not(feature = "prover"))]
+    #[tracing::instrument(level = "info", skip_all)]
+    async fn prove_spell_tx(
+        &self,
+        prove_request: ProveRequest,
+    ) -> anyhow::Result<[bitcoin::Transaction; 2]> {
+        let client = &self.client;
+        let response = client
+            .post(&self.charms_prove_api_url)
+            .json(&prove_request)
+            .send()
+            .await?;
+        let [commit_tx, spell_tx]: [String; 2] = response.json().await?;
+        let transactions = [deserialize_hex(&commit_tx)?, deserialize_hex(&spell_tx)?];
+        Ok(transactions)
+    }
+}
+
+#[cfg(feature = "prover")]
+fn fee_sats_per_megacycle() -> u64 {
+    env::var("CHARMS_FEE_RATE")
+        .map(|s| s.parse::<u64>().unwrap())
+        .unwrap_or(1000)
+}
+
+#[cfg(feature = "prover")]
+fn fee_sats_base() -> u64 {
+    env::var("CHARMS_FEE_BASE")
+        .map(|s| s.parse::<u64>().unwrap())
+        .unwrap_or(1000)
+}
+
+pub fn align_spell_to_tx(
     norm_spell: NormalizedSpell,
     tx: &bitcoin::Transaction,
 ) -> anyhow::Result<NormalizedSpell> {

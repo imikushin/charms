@@ -12,6 +12,7 @@ use sp1_verifier::Groth16Verifier;
 
 /// Extract a [`NormalizedSpell`] from a transaction and verify it.
 /// Incorrect spells are rejected.
+#[tracing::instrument(level = "debug", skip_all)]
 pub fn extract_and_verify_spell(
     tx: &bitcoin::Transaction,
     spell_vk: &str,
@@ -46,6 +47,7 @@ pub fn extract_and_verify_spell(
     Ok(spell)
 }
 
+#[tracing::instrument(level = "debug", skip_all)]
 fn spell_with_ins(spell: NormalizedSpell, spell_tx_ins: &[TxIn]) -> NormalizedSpell {
     let tx_ins = spell_tx_ins // exclude spell commitment input
         .iter()
@@ -61,6 +63,7 @@ fn spell_with_ins(spell: NormalizedSpell, spell_tx_ins: &[TxIn]) -> NormalizedSp
     spell
 }
 
+#[tracing::instrument(level = "debug", skip_all)]
 pub fn parse_spell_and_proof(spell_tx_in: &TxIn) -> anyhow::Result<(NormalizedSpell, Proof)> {
     ensure!(
         spell_tx_in

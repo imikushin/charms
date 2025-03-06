@@ -1,20 +1,28 @@
 use crate::{
-    app, cli,
-    cli::{WalletCastParams, WalletListParams},
-    spell::{prove_spell_tx, KeyedCharms, Spell},
+    cli,
+    cli::WalletListParams,
+    spell::{KeyedCharms, Spell},
     tx,
-    tx::txs_by_txid,
-    utils,
     utils::str_index,
 };
 use anyhow::{ensure, Result};
-use bitcoin::{consensus::encode::serialize_hex, hashes::Hash, OutPoint, Transaction};
+use bitcoin::{address::NetworkUnchecked, hashes::Hash, Address, OutPoint, Transaction};
 use charms_data::{App, Data, TxId, UtxoId};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
     process::{Command, Stdio},
 };
+
+pub trait List {
+    fn list(&self, params: WalletListParams) -> Result<()>;
+}
+
+pub struct WalletCli {
+    // pub app_prover: Rc<app::Prover>,
+    // pub sp1_client: Rc<Box<dyn Prover<CpuProverComponents>>>,
+    // pub spell_prover: Rc<spell::Prover>,
+}
 
 #[derive(Debug, Deserialize)]
 struct BListUnspentItem {
@@ -40,18 +48,20 @@ struct AppsAndCharmsOutputs {
     outputs: BTreeMap<UtxoId, OutputWithCharms>,
 }
 
-pub fn list(params: WalletListParams) -> Result<()> {
-    let b_cli = Command::new("bitcoin-cli")
-        .args(&["listunspent", "0"]) // include outputs with 0 confirmations
-        .stdout(Stdio::piped())
-        .spawn()?;
-    let output = b_cli.wait_with_output()?;
-    let b_list_unspent: Vec<BListUnspentItem> = serde_json::from_slice(&output.stdout)?;
+impl List for WalletCli {
+    fn list(&self, params: WalletListParams) -> Result<()> {
+        let b_cli = Command::new("bitcoin-cli")
+            .args(&["listunspent", "0"]) // include outputs with 0 confirmations
+            .stdout(Stdio::piped())
+            .spawn()?;
+        let output = b_cli.wait_with_output()?;
+        let b_list_unspent: Vec<BListUnspentItem> = serde_json::from_slice(&output.stdout)?;
 
-    let unspent_charms_outputs = outputs_with_charms(b_list_unspent)?;
+        let unspent_charms_outputs = outputs_with_charms(b_list_unspent)?;
 
-    cli::print_output(&unspent_charms_outputs, params.json)?;
-    Ok(())
+        cli::print_output(&unspent_charms_outputs, params.json)?;
+        Ok(())
+    }
 }
 
 fn outputs_with_charms(b_list_unspent: Vec<BListUnspentItem>) -> Result<AppsAndCharmsOutputs> {
@@ -183,71 +193,7 @@ fn get_tx(txid: &str) -> Result<Transaction> {
 
 pub const MIN_SATS: u64 = 1000;
 
-pub fn cast(
-    WalletCastParams {
-        spell,
-        app_bins,
-        funding_utxo_id,
-        fee_rate,
-    }: WalletCastParams,
-) -> Result<()> {
-    utils::logger::setup_logger();
-
-    // Parse funding UTXO early: to fail fast
-    let funding_utxo = crate::cli::tx::parse_outpoint(&funding_utxo_id)?;
-
-    ensure!(fee_rate >= 1.0, "fee rate must be >= 1.0");
-    let mut spell: Spell = serde_yaml::from_slice(&std::fs::read(spell)?)?;
-
-    // make sure spell inputs all have utxo_id
-    ensure!(
-        spell.ins.iter().all(|u| u.utxo_id.is_some()),
-        "all spell inputs must have utxo_id"
-    );
-
-    // make sure spell outputs all have addresses
-    ensure!(
-        spell.outs.iter().all(|u| u.address.is_some()),
-        "all spell outputs must have addresses"
-    );
-
-    for u in spell.outs.iter_mut() {
-        u.sats.get_or_insert(MIN_SATS);
-    }
-
-    let tx = tx::from_spell(&spell);
-
-    let prev_txs = txs_by_txid(cli::tx::get_prev_txs(&tx)?)?;
-    let funding_utxo_value = funding_utxo_value(&funding_utxo)?;
-    let change_address = new_change_address()?;
-
-    let app_prover = app::Prover::new();
-    let binaries = cli::app::binaries_by_vk(&app_prover, app_bins)?;
-
-    let [commit_tx, spell_tx] = prove_spell_tx(
-        spell,
-        tx,
-        binaries,
-        prev_txs,
-        funding_utxo,
-        funding_utxo_value,
-        change_address,
-        fee_rate,
-    )?;
-
-    let signed_commit_tx_hex = sign_tx(&serialize_hex(&commit_tx))?;
-    let signed_spell_tx_hex = sign_spell_tx(&serialize_hex(&spell_tx), &commit_tx)?;
-
-    // Print JSON array of transaction hexes
-    println!(
-        "{}",
-        serde_json::to_string(&[signed_commit_tx_hex, signed_spell_tx_hex])?
-    );
-
-    Ok(())
-}
-
-fn sign_spell_tx(spell_tx_hex: &String, commit_tx: &Transaction) -> Result<String> {
+pub(crate) fn sign_spell_tx(spell_tx_hex: &String, commit_tx: &Transaction) -> Result<String> {
     let cmd_line = format!(
         r#"bitcoin-cli signrawtransactionwithwallet {} '[{{"txid":"{}","vout":0,"scriptPubKey":"{}","amount":{}}}]' | jq -r '.hex'"#,
         spell_tx_hex,
@@ -261,7 +207,7 @@ fn sign_spell_tx(spell_tx_hex: &String, commit_tx: &Transaction) -> Result<Strin
     Ok(String::from_utf8(cmd_out.stdout)?.trim().to_string())
 }
 
-fn sign_tx(tx_hex: &str) -> Result<String> {
+pub(crate) fn sign_tx(tx_hex: &str) -> Result<String> {
     let cmd_out = Command::new("bash")
         .args(&[
             "-c",
@@ -275,14 +221,17 @@ fn sign_tx(tx_hex: &str) -> Result<String> {
     Ok(String::from_utf8(cmd_out.stdout)?.trim().to_string())
 }
 
-fn new_change_address() -> Result<String> {
+pub(crate) fn new_change_address() -> Result<Address<NetworkUnchecked>> {
     let cmd_out = Command::new("bitcoin-cli")
         .args(&["getrawchangeaddress"])
         .output()?;
-    Ok(String::from_utf8(cmd_out.stdout)?.trim().to_string())
+    Ok(String::from_utf8(cmd_out.stdout)?
+        .trim()
+        .to_string()
+        .parse()?)
 }
 
-fn funding_utxo_value(utxo: &OutPoint) -> Result<u64> {
+pub(crate) fn funding_utxo_value(utxo: &OutPoint) -> Result<u64> {
     let cmd = format!(
         "bitcoin-cli gettxout {} {} | jq -r '.value*100000000 | round'",
         utxo.txid, utxo.vout

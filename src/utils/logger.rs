@@ -15,7 +15,12 @@ pub fn setup_logger() {
         let default_filter = "off";
         let env_filter = EnvFilter::try_from_default_env()
             .unwrap_or_else(|_| EnvFilter::new(default_filter))
+            .add_directive("sp1_prover=info".parse().unwrap())
+            .add_directive("sp1_recursion_circuit=info".parse().unwrap())
+            .add_directive("sp1_recursion_compiler=info".parse().unwrap())
+            .add_directive("sp1_stark=info".parse().unwrap())
             .add_directive("hyper=off".parse().unwrap())
+            .add_directive("p3_uni_stark=off".parse().unwrap())
             .add_directive("p3_keccak_air=off".parse().unwrap())
             .add_directive("p3_fri=off".parse().unwrap())
             .add_directive("p3_dft=off".parse().unwrap())
@@ -39,7 +44,7 @@ pub fn setup_logger() {
                     .with_target(false)
                     .with_thread_names(false)
                     .with_env_filter(env_filter)
-                    .with_span_events(FmtSpan::CLOSE)
+                    .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
                     .with_writer(std::io::stderr) // log to stderr
                     .finish()
                     .init();

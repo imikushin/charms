@@ -4,10 +4,28 @@ pub mod spell;
 pub mod tx;
 pub mod wallet;
 
+#[cfg(feature = "prover")]
+use crate::utils::sp1::CudaProver;
+use crate::{
+    cli::{
+        server::Server,
+        spell::{Check, Prove, SpellCli},
+        wallet::{List, WalletCli},
+    },
+    spell::Prover,
+    utils,
+    utils::BoxedSP1Prover,
+};
+use bitcoin::{address::NetworkUnchecked, Address};
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use clap_complete::{generate, Shell};
+#[cfg(not(feature = "prover"))]
+use reqwest::Client;
 use serde::Serialize;
-use std::{io, net::IpAddr, path::PathBuf};
+use sp1_sdk::{install::try_install_circuit_artifacts, CpuProver, ProverClient};
+use spell::Cast;
+use std::{io, net::IpAddr, path::PathBuf, str::FromStr, sync::Arc};
+use utils::AsyncShared;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -18,26 +36,29 @@ pub struct Cli {
 
 #[derive(Args)]
 pub struct ServerConfig {
-    /// IP address to listen on, defaults to 0.0.0.0 (all).
-    #[arg(long, default_value = "0.0.0.0")]
-    ip_addr: IpAddr,
+    /// IP address to listen on, defaults to `::` (all on IPv6).
+    #[arg(long, default_value = "::")]
+    ip: IpAddr,
 
     /// Port to listen on, defaults to 17784.
     #[arg(long, default_value = "17784")]
     port: u16,
 
     /// bitcoind RPC URL. Set via RPC_URL env var.
-    #[arg(long, env)]
+    #[arg(long, env, default_value = "http://localhost:48332")]
+    #[cfg(not(feature = "prover"))]
     rpc_url: String,
 
     /// bitcoind RPC user. Recommended to set via RPC_USER env var.
-    #[arg(long, env, default_value = "__cookie__")]
+    #[arg(long, env, default_value = "hello")]
+    #[cfg(not(feature = "prover"))]
     rpc_user: String,
 
     /// bitcoind RPC password. Recommended to set via RPC_PASSWORD env var.
     /// Use the .cookie file in the bitcoind data directory to look up the password:
     /// the format is `__cookie__:password`.
-    #[arg(long, env)]
+    #[arg(long, env, default_value = "world")]
+    #[cfg(not(feature = "prover"))]
     rpc_password: String,
 }
 
@@ -76,6 +97,13 @@ pub enum Commands {
         #[arg(value_enum)]
         shell: Shell,
     },
+
+    /// Utils
+    #[clap(hide = true)]
+    Utils {
+        #[command(subcommand)]
+        command: UtilsCommands,
+    },
 }
 
 #[derive(Args)]
@@ -83,10 +111,6 @@ pub struct SpellProveParams {
     /// Spell source file (YAML/JSON).
     #[arg(long, default_value = "/dev/stdin")]
     spell: PathBuf,
-
-    /// Bitcoin transaction (hex-encoded). If not provided, will be created from the spell.
-    #[arg(long)]
-    tx: Option<String>,
 
     /// Pre-requisite transactions (hex-encoded) separated by commas (`,`).
     /// These are the transactions that create the UTXOs that the `tx` (and the spell) spends.
@@ -101,15 +125,15 @@ pub struct SpellProveParams {
     /// UTXO ID of the funding transaction output (txid:vout).
     /// This UTXO will be spent to pay the fees (at the `fee-rate` per vB) for the commit and spell
     /// transactions. The rest of the value will be returned to the `change-address`.
-    #[arg(long)]
-    funding_utxo_id: String,
+    #[arg(long, alias = "funding-utxo-id")]
+    funding_utxo: String,
     /// Value of the funding UTXO in sats.
     #[arg(long)]
     funding_utxo_value: u64,
 
     /// Address to send the change to.
     #[arg(long)]
-    change_address: String,
+    change_address: Address<NetworkUnchecked>,
 
     /// Fee rate in sats/vB.
     #[arg(long, default_value = "2.0")]
@@ -132,6 +156,11 @@ pub enum SpellCommands {
     Check(#[command(flatten)] SpellCheckParams),
     /// Prove the spell is correct.
     Prove(#[command(flatten)] SpellProveParams),
+    /// Cast a spell.
+    /// Creates a spell, creates the underlying Bitcoin transaction, proves the spell, creates the
+    /// commit transaction. Signs both the commit and spell transactions with the user's wallet.
+    /// Returns the hex-encoded signed commit and spell transactions.
+    Cast(#[command(flatten)] SpellCastParams),
 }
 
 #[derive(Subcommand)]
@@ -180,11 +209,6 @@ pub enum AppCommands {
 pub enum WalletCommands {
     /// List outputs with charms in the user's wallet.
     List(#[command(flatten)] WalletListParams),
-    /// Cast a spell.
-    /// Creates a spell, creates the underlying Bitcoin transaction, proves the spell, creates the
-    /// commit transaction. Signs both the commit and spell transactions with the user's wallet.
-    /// Returns the hex-encoded signed commit and spell transactions.
-    Cast(#[command(flatten)] WalletCastParams),
 }
 
 #[derive(Args)]
@@ -195,7 +219,7 @@ pub struct WalletListParams {
 }
 
 #[derive(Args)]
-pub struct WalletCastParams {
+pub struct SpellCastParams {
     /// Path to spell source file (YAML/JSON).
     #[arg(long, default_value = "/dev/stdin")]
     spell: PathBuf,
@@ -203,22 +227,37 @@ pub struct WalletCastParams {
     #[arg(long, value_delimiter = ',')]
     app_bins: Vec<PathBuf>,
     /// Funding UTXO ID (`txid:vout`).
-    #[arg(long)]
-    funding_utxo_id: String,
+    #[arg(long, alias = "funding-utxo-id")]
+    funding_utxo: String,
     /// Fee rate in sats/vB.
     #[arg(long, default_value = "2.0")]
     fee_rate: f64,
 }
 
+#[derive(Subcommand)]
+pub enum UtilsCommands {
+    /// Install circuit files.
+    InstallCircuitFiles,
+}
+
 pub async fn run() -> anyhow::Result<()> {
+    utils::logger::setup_logger();
+
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Server(server_config) => server::server(server_config).await,
-        Commands::Spell { command } => match command {
-            SpellCommands::Check(params) => spell::check(params),
-            SpellCommands::Prove(params) => spell::prove(params),
-        },
+        Commands::Server(server_config) => {
+            let server = server(server_config);
+            server.serve().await
+        }
+        Commands::Spell { command } => {
+            let spell_cli = spell_cli();
+            match command {
+                SpellCommands::Check(params) => spell_cli.check(params),
+                SpellCommands::Prove(params) => spell_cli.prove(params).await,
+                SpellCommands::Cast(params) => spell_cli.cast(params).await,
+            }
+        }
         Commands::Tx { command } => match command {
             TxCommands::ShowSpell { tx, json } => tx::tx_show_spell(tx, json),
         },
@@ -228,12 +267,106 @@ pub async fn run() -> anyhow::Result<()> {
             AppCommands::Build => app::build(),
             AppCommands::Run { spell, path } => app::run(spell, path),
         },
-        Commands::Wallet { command } => match command {
-            WalletCommands::List(params) => wallet::list(params),
-            WalletCommands::Cast(params) => wallet::cast(params),
-        },
+        Commands::Wallet { command } => {
+            let wallet_cli = wallet_cli();
+            match command {
+                WalletCommands::List(params) => wallet_cli.list(params),
+            }
+        }
         Commands::Completions { shell } => generate_completions(shell),
+        Commands::Utils { command } => match command {
+            UtilsCommands::InstallCircuitFiles => {
+                let _ = try_install_circuit_artifacts("groth16");
+                Ok(())
+            }
+        },
     }
+}
+
+fn server(server_config: ServerConfig) -> Server {
+    let prover = AsyncShared::new(spell_prover);
+    Server::new(server_config, prover)
+}
+
+#[tracing::instrument(level = "debug")]
+fn spell_prover() -> Prover {
+    let spell_sp1_client: Arc<BoxedSP1Prover> = Arc::new(sp1_env_client());
+    let app_sp1_client: Arc<BoxedSP1Prover> = app_sp1_client(&spell_sp1_client);
+
+    let app_prover = Arc::new(app::Prover {
+        sp1_client: app_sp1_client.clone(),
+    });
+
+    let charms_fee_address = std::env::var("CHARMS_FEE_ADDRESS").ok().map(|s| {
+        Address::from_str(&s).expect("CHARMS_FEE_ADDRESS must be a valid Bitcoin address")
+    });
+
+    let charms_prove_api_url = std::env::var("CHARMS_PROVE_API_URL")
+        .ok()
+        .unwrap_or("https://api-t4.charms.dev/spells/prove".to_string());
+
+    #[cfg(not(feature = "prover"))]
+    let client = Client::builder()
+        .use_rustls_tls() // avoids system OpenSSL issues
+        .http2_prior_knowledge()
+        .http2_adaptive_window(true)
+        .connect_timeout(std::time::Duration::from_secs(15))
+        .build()
+        .expect("HTTP client should be created successfully");
+
+    let spell_prover = Prover {
+        app_prover: app_prover.clone(),
+        sp1_client: spell_sp1_client.clone(),
+        charms_fee_address,
+        charms_prove_api_url,
+        #[cfg(not(feature = "prover"))]
+        client,
+    };
+    spell_prover
+}
+
+fn spell_cli() -> SpellCli {
+    let spell_prover = spell_prover();
+
+    let spell_cli = SpellCli {
+        app_prover: spell_prover.app_prover.clone(),
+        sp1_client: spell_prover.sp1_client.clone(),
+        spell_prover: Arc::new(spell_prover),
+    };
+    spell_cli
+}
+
+fn app_sp1_client(spell_sp1_client: &Arc<BoxedSP1Prover>) -> Arc<BoxedSP1Prover> {
+    match std::env::var("SP1_PROVER").unwrap_or_default().as_str() {
+        "" | "cpu" | "cuda" => spell_sp1_client.clone(),
+        "network" => Arc::new(Box::new(sp1_cpu_client())),
+        _ => unreachable!("Only 'cpu', 'cuda', and 'network' are supported as SP1_PROVER values"),
+    }
+}
+
+#[tracing::instrument(level = "info")]
+#[cfg(feature = "prover")]
+fn sp1_cuda_client() -> CudaProver {
+    CudaProver::new(sp1_prover::SP1Prover::new())
+}
+
+#[tracing::instrument(level = "info")]
+fn sp1_cpu_client() -> CpuProver {
+    ProverClient::builder().cpu().build()
+}
+
+#[tracing::instrument(level = "debug")]
+fn sp1_env_client() -> BoxedSP1Prover {
+    match std::env::var("SP1_PROVER").unwrap_or_default().as_str() {
+        #[cfg(feature = "prover")]
+        "cuda" => Box::new(sp1_cuda_client()),
+        _ => Box::new(ProverClient::from_env()),
+    }
+}
+
+fn wallet_cli() -> WalletCli {
+    let wallet_cli = WalletCli {};
+    wallet_cli
 }
 
 fn generate_completions(shell: Shell) -> anyhow::Result<()> {
@@ -244,8 +377,8 @@ fn generate_completions(shell: Shell) -> anyhow::Result<()> {
 
 fn print_output<T: Serialize>(output: &T, json: bool) -> anyhow::Result<()> {
     match json {
-        true => serde_json::to_writer_pretty(std::io::stdout(), &output)?,
-        false => serde_yaml::to_writer(std::io::stdout(), &output)?,
+        true => serde_json::to_writer_pretty(io::stdout(), &output)?,
+        false => serde_yaml::to_writer(io::stdout(), &output)?,
     };
     Ok(())
 }

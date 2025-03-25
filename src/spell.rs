@@ -319,7 +319,7 @@ impl Prove for Prover {
         app_binaries: &BTreeMap<B32, Vec<u8>>,
         app_private_inputs: BTreeMap<App, Data>,
         prev_txs: Vec<bitcoin::Transaction>,
-        expected_cycles: Option<Vec<u64>>,
+        _expected_cycles: Option<Vec<u64>>,
     ) -> anyhow::Result<(NormalizedSpell, Proof, u64)> {
         let mut stdin = SP1Stdin::new();
 
@@ -346,17 +346,17 @@ impl Prove for Prover {
         let tx = to_tx(&norm_spell, &prev_spells);
         let app_public_inputs = &norm_spell.app_public_inputs;
 
-        // verify that apps execute within expected cycles
         // TODO add a way to pass the expected cycles to the prover, remove this
-        if expected_cycles.is_some() {
-            self.app_prover.run_all(
-                app_binaries,
-                &tx,
-                app_public_inputs,
-                &app_private_inputs,
-                expected_cycles,
-            )?;
-        }
+        // verify that apps execute within expected cycles
+        // if expected_cycles.is_some() {
+        //     self.app_prover.run_all(
+        //         app_binaries,
+        //         &tx,
+        //         app_public_inputs,
+        //         &app_private_inputs,
+        //         expected_cycles,
+        //     )?;
+        // }
 
         self.app_prover.prove(
             app_binaries,

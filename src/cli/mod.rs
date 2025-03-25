@@ -36,8 +36,8 @@ pub struct Cli {
 
 #[derive(Args)]
 pub struct ServerConfig {
-    /// IP address to listen on, defaults to `::` (all on IPv6).
-    #[arg(long, default_value = "::")]
+    /// IP address to listen on, defaults to `0.0.0.0` (all on IPv4).
+    #[arg(long, default_value = "0.0.0.0")]
     ip: IpAddr,
 
     /// Port to listen on, defaults to 17784.

@@ -105,6 +105,7 @@ async fn cors_middleware(request: axum::http::Request<Body>, next: Next) -> Resp
 
 // Handlers
 #[cfg(not(feature = "prover"))]
+#[tracing::instrument(level = "debug", skip_all)]
 async fn show_spell_by_txid(
     State(rpc): State<Arc<Client>>,
     Path(txid): Path<String>,
@@ -113,6 +114,7 @@ async fn show_spell_by_txid(
 }
 
 #[cfg(not(feature = "prover"))]
+#[tracing::instrument(level = "debug", skip_all)]
 async fn show_spell_for_tx_hex(
     Path(txid): Path<String>,
     Json(payload): Json<ShowSpellRequest>,
@@ -120,6 +122,7 @@ async fn show_spell_for_tx_hex(
     show_spell(&txid, &payload).map(Json)
 }
 
+#[tracing::instrument(level = "debug", skip_all)]
 async fn prove_spell(
     State(prover): State<Arc<AsyncShared<Prover>>>,
     Json(payload): Json<ProveRequest>,

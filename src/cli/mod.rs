@@ -303,7 +303,7 @@ fn spell_prover() -> Prover {
 
     let charms_prove_api_url = std::env::var("CHARMS_PROVE_API_URL")
         .ok()
-        .unwrap_or("https://api-t4.charms.dev/spells/prove".to_string());
+        .unwrap_or("https://prove.charms.dev/spells/prove".to_string());
 
     #[cfg(not(feature = "prover"))]
     let client = Client::builder()

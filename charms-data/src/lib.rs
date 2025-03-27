@@ -280,14 +280,18 @@ impl<'de> Deserialize<'de> for App {
                 let tag = seq
                     .next_element()?
                     .ok_or_else(|| de::Error::missing_field("tag"))?;
-                let identity = seq
+                let id = seq
                     .next_element()?
-                    .ok_or_else(|| de::Error::missing_field("identity"))?;
-                let vk = seq
+                    .ok_or_else(|| de::Error::missing_field("id"))?;
+                let vk_hash = seq
                     .next_element()?
-                    .ok_or_else(|| de::Error::missing_field("vk"))?;
+                    .ok_or_else(|| de::Error::missing_field("vk_hash"))?;
 
-                Ok(App { tag, identity, vk })
+                Ok(App {
+                    tag,
+                    identity: id,
+                    vk: vk_hash,
+                })
             }
         }
 
@@ -397,7 +401,7 @@ impl<'de> Deserialize<'de> for TxId {
 
 /// 32-byte byte string (e.g. a hash, like SHA256).
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Default)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
 pub struct B32(pub [u8; 32]);
 
 impl B32 {
@@ -424,61 +428,7 @@ impl fmt::Display for B32 {
 
 impl fmt::Debug for B32 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Bytes32({})", hex::encode(&self.0))
-    }
-}
-
-impl Serialize for B32 {
-    fn serialize<S>(&self, serializer: S) -> core::result::Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        if serializer.is_human_readable() {
-            serializer.serialize_str(&self.to_string())
-        } else {
-            serializer.serialize_bytes(&self.0)
-        }
-    }
-}
-
-impl<'de> Deserialize<'de> for B32 {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        struct B32Visitor;
-
-        impl<'de> Visitor<'de> for B32Visitor {
-            type Value = B32;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("a string of 64 hex characters or a byte array of 32 bytes")
-            }
-
-            // Handle human-readable format ("hex")
-            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                B32::from_str(value).map_err(E::custom)
-            }
-
-            // Handle non-human-readable byte format [u8; 32]
-            fn visit_byte_buf<E>(self, v: Vec<u8>) -> std::result::Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                Ok(B32(v.try_into().map_err(|e| {
-                    E::custom(format!("invalid bytes: {:?}", e))
-                })?))
-            }
-        }
-
-        if deserializer.is_human_readable() {
-            deserializer.deserialize_str(B32Visitor)
-        } else {
-            deserializer.deserialize_byte_buf(B32Visitor)
-        }
+        write!(f, "VkHash({})", hex::encode(&self.0))
     }
 }
 

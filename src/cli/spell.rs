@@ -69,6 +69,7 @@ impl Prove for SpellCli {
                 funding_utxo_value,
                 change_address,
                 fee_rate,
+                charms_fee: None,
             })
             .await?;
 
@@ -163,6 +164,7 @@ impl Cast for SpellCli {
                 funding_utxo_value,
                 change_address,
                 fee_rate,
+                charms_fee: None,
             })
             .await?;
 

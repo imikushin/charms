@@ -12,7 +12,7 @@ use crate::{
         spell::{Check, Prove, SpellCli},
         wallet::{List, WalletCli},
     },
-    spell::Prover,
+    spell::{CharmsFee, Prover},
     utils,
     utils::BoxedSP1Prover,
 };
@@ -297,9 +297,7 @@ fn spell_prover() -> Prover {
         sp1_client: app_sp1_client.clone(),
     });
 
-    let charms_fee_address = std::env::var("CHARMS_FEE_ADDRESS").ok().map(|s| {
-        Address::from_str(&s).expect("CHARMS_FEE_ADDRESS must be a valid Bitcoin address")
-    });
+    let charms_fee_settings = charms_fee_settings();
 
     let charms_prove_api_url = std::env::var("CHARMS_PROVE_API_URL")
         .ok()
@@ -317,12 +315,50 @@ fn spell_prover() -> Prover {
     let spell_prover = Prover {
         app_prover: app_prover.clone(),
         sp1_client: spell_sp1_client.clone(),
-        charms_fee_address,
+        charms_fee_settings,
         charms_prove_api_url,
         #[cfg(not(feature = "prover"))]
         client,
     };
     spell_prover
+}
+
+fn charms_fee_settings() -> Option<CharmsFee> {
+    charms_fee_address().map(|fee_address| {
+        let charms_fee_rate = charms_fee_rate();
+        let charms_fee_base = charms_fee_base();
+        CharmsFee {
+            fee_address,
+            fee_rate: charms_fee_rate,
+            fee_base: charms_fee_base,
+        }
+    })
+}
+
+fn charms_fee_address() -> Option<Address<NetworkUnchecked>> {
+    std::env::var("CHARMS_FEE_ADDRESS")
+        .ok()
+        .map(|s| Address::from_str(&s).expect("CHARMS_FEE_ADDRESS must be a valid Bitcoin address"))
+}
+
+fn charms_fee_rate() -> u64 {
+    std::env::var("CHARMS_FEE_RATE")
+        .ok()
+        .map(|s| {
+            s.parse::<u64>()
+                .expect("CHARMS_FEE_RATE must be an unsigned integer")
+        })
+        .unwrap_or(500)
+}
+
+fn charms_fee_base() -> u64 {
+    std::env::var("CHARMS_FEE_BASE")
+        .ok()
+        .map(|s| {
+            s.parse::<u64>()
+                .expect("CHARMS_FEE_BASE must be an unsigned integer")
+        })
+        .unwrap_or(1000)
 }
 
 fn spell_cli() -> SpellCli {

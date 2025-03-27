@@ -413,6 +413,13 @@ pub trait ProveSpellTx {
     ) -> impl std::future::Future<Output = anyhow::Result<[bitcoin::Transaction; 2]>>;
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CharmsFee {
+    pub fee_address: Address<NetworkUnchecked>,
+    pub fee_rate: u64,
+    pub fee_base: u64,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ProveRequest {
     pub spell: Spell,
@@ -422,12 +429,13 @@ pub struct ProveRequest {
     pub funding_utxo_value: u64,
     pub change_address: Address<NetworkUnchecked>,
     pub fee_rate: f64,
+    pub charms_fee: Option<CharmsFee>,
 }
 
 pub struct Prover {
     pub app_prover: Arc<app::Prover>,
     pub sp1_client: Arc<BoxedSP1Prover>,
-    pub charms_fee_address: Option<Address<NetworkUnchecked>>,
+    pub charms_fee_settings: Option<CharmsFee>,
     pub charms_prove_api_url: String,
     #[cfg(not(feature = "prover"))]
     pub client: Client,
@@ -445,6 +453,7 @@ impl ProveSpellTx for Prover {
             funding_utxo_value,
             change_address,
             fee_rate,
+            charms_fee,
         }: ProveRequest,
     ) -> anyhow::Result<[bitcoin::Transaction; 2]> {
         let prev_txs_by_id = txs_by_txid(prev_txs.clone());
@@ -488,14 +497,12 @@ impl ProveSpellTx for Prover {
         // Parse change address into ScriptPubkey
         let change_pubkey = change_address.assume_checked().script_pubkey();
 
-        let charms_fee_pubkey = self
-            .charms_fee_address
+        let charms_fee_pubkey = charms_fee
             .clone()
-            .map(|addr| addr.assume_checked().script_pubkey());
+            .map(|fee| fee.fee_address.assume_checked().script_pubkey());
 
         // Calculate fee
-        let charms_fee = self
-            .charms_fee_address
+        let charms_fee = charms_fee
             .as_ref()
             .map(|_| {
                 Amount::from_sat(
@@ -530,6 +537,7 @@ impl ProveSpellTx for Prover {
         prove_request: ProveRequest,
     ) -> anyhow::Result<[bitcoin::Transaction; 2]> {
         let client = &self.client;
+        let prove_request = self.add_fee(prove_request);
         let response = client
             .post(&self.charms_prove_api_url)
             .json(&prove_request)
@@ -538,6 +546,15 @@ impl ProveSpellTx for Prover {
         let [commit_tx, spell_tx]: [String; 2] = response.json().await?;
         let transactions = [deserialize_hex(&commit_tx)?, deserialize_hex(&spell_tx)?];
         Ok(transactions)
+    }
+}
+
+impl Prover {
+    #[cfg(not(feature = "prover"))]
+    fn add_fee(&self, prove_request: ProveRequest) -> ProveRequest {
+        let mut prove_request = prove_request;
+        prove_request.charms_fee = self.charms_fee_settings.clone();
+        prove_request
     }
 }
 

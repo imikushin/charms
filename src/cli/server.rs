@@ -157,7 +157,7 @@ fn get_spell(rpc: Arc<Client>, txid: &str) -> Result<Spell, StatusCode> {
                 Err(StatusCode::NOT_FOUND)
             }
             _ => {
-                eprintln!("Error: {:?}", e);
+                tracing::warn!("Error: {:?}", e);
                 Err(StatusCode::INTERNAL_SERVER_ERROR)
             }
         },

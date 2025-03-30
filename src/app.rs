@@ -49,10 +49,10 @@ impl Prover {
 
         for (app, x) in app_public_inputs {
             let Some((pk, vk)) = pk_vks.get(&app.vk) else {
-                eprintln!("app binary not present: {:?}", app);
+                tracing::info!("app binary not provided: {}", app);
                 continue;
             };
-            dbg!(app);
+            tracing::info!("proving app: {}", app);
             let mut app_stdin = SP1Stdin::new();
             let empty = Data::empty();
             let w = app_private_inputs.get(app).unwrap_or(&empty);
@@ -64,7 +64,7 @@ impl Prover {
             let SP1Proof::Compressed(compressed_proof) = app_proof.proof else {
                 unreachable!()
             };
-            eprintln!("app proof generated! for {:?}", app);
+            tracing::info!("app proof generated: {}", app);
             spell_stdin.write_proof(*compressed_proof, vk.vk.clone());
         }
 
@@ -92,10 +92,10 @@ impl Prover {
                 match app_binaries.get(&app.vk) {
                     Some(app_binary) => {
                         let sp1_context = expected_cycles
-                            .map(|v| SP1Context::builder().max_cycles(v + 1).build()) // TODO remove the `+ 1` when https://github.com/succinctlabs/sp1/pull/2141 is merged
+                            .map(|v| SP1Context::builder().max_cycles(v).build())
                             .unwrap_or_default();
 
-                        eprintln!("running app: {:?}", app);
+                        tracing::info!("running app: {:?}", app);
 
                         let (committed_values, report) =
                             self.sp1_client
@@ -120,12 +120,12 @@ impl Prover {
                             "committed data mismatch"
                         );
 
-                        eprintln!("app checked!");
+                        eprintln!("✅  app contract satisfied: {}", app);
 
                         Ok(cycles)
                     }
                     None => {
-                        eprintln!("checking app: {:?}", app);
+                        tracing::info!("checking simple transfer for: {}", app);
                         if let Some(expected_cycles) = expected_cycles {
                             ensure!(
                                 expected_cycles == 0,
@@ -135,11 +135,10 @@ impl Prover {
                             );
                         }
                         ensure!(is_simple_transfer(app, tx));
-                        eprintln!("app checked!");
+                        eprintln!("✅  simple transfer ok: {}", app);
                         Ok(0)
                     }
                 }
-                // eprintln!("app checked!");
             })
             .collect::<anyhow::Result<_>>()?;
 

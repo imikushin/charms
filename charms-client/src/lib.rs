@@ -79,7 +79,7 @@ pub fn prev_spells(
                 (
                     extract_and_verify_spell(tx, spell_vk)
                         .map_err(|e| {
-                            eprintln!("no correct spell in tx {}: {}", tx_id, e);
+                            tracing::info!("no correct spell in tx {}: {}", tx_id, e);
                         })
                         .ok(),
                     tx.output.len(),

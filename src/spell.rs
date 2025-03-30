@@ -486,9 +486,10 @@ impl ProveSpellTx for Prover {
             Some(expected_cycles),
         )?;
 
-        eprintln!(
+        tracing::info!(
             "proof generated. total app cycles: {}, spell cycles: {}",
-            total_app_cycles, spell_cycles,
+            total_app_cycles,
+            spell_cycles,
         );
 
         // Serialize spell into CBOR

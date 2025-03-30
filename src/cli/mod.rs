@@ -14,7 +14,7 @@ use crate::{
     },
     spell::{CharmsFee, Prover},
     utils,
-    utils::BoxedSP1Prover,
+    utils::{BoxedSP1Prover, Shared},
 };
 use bitcoin::{address::NetworkUnchecked, Address};
 use clap::{Args, CommandFactory, Parser, Subcommand};
@@ -290,12 +290,11 @@ fn server(server_config: ServerConfig) -> Server {
 
 #[tracing::instrument(level = "debug")]
 fn spell_prover() -> Prover {
-    let spell_sp1_client: Arc<BoxedSP1Prover> = Arc::new(sp1_env_client());
-    let app_sp1_client: Arc<BoxedSP1Prover> = app_sp1_client(&spell_sp1_client);
-
     let app_prover = Arc::new(app::Prover {
-        sp1_client: app_sp1_client.clone(),
+        sp1_client: Arc::new(Shared::new(app_sp1_client)),
     });
+
+    let spell_sp1_client = spell_sp1_client(&app_prover.sp1_client);
 
     let charms_fee_settings = charms_fee_settings();
 
@@ -366,28 +365,35 @@ fn spell_cli() -> SpellCli {
 
     let spell_cli = SpellCli {
         app_prover: spell_prover.app_prover.clone(),
-        sp1_client: spell_prover.sp1_client.clone(),
         spell_prover: Arc::new(spell_prover),
     };
     spell_cli
 }
 
-fn app_sp1_client(spell_sp1_client: &Arc<BoxedSP1Prover>) -> Arc<BoxedSP1Prover> {
+fn app_sp1_client() -> BoxedSP1Prover {
     match std::env::var("SP1_PROVER").unwrap_or_default().as_str() {
-        "" | "cpu" | "cuda" => spell_sp1_client.clone(),
-        "network" => Arc::new(Box::new(sp1_cpu_client())),
+        "network" => Box::new(sp1_cpu_client()),
+        "" | "cpu" | "cuda" => sp1_env_client(),
+        _ => unreachable!("Only 'cpu', 'cuda', and 'network' are supported as SP1_PROVER values"),
+    }
+}
+
+fn spell_sp1_client(app_sp1_client: &Arc<Shared<BoxedSP1Prover>>) -> Arc<Shared<BoxedSP1Prover>> {
+    match std::env::var("SP1_PROVER").unwrap_or_default().as_str() {
+        "" | "cpu" | "cuda" => app_sp1_client.clone(),
+        "network" => Arc::new(Shared::new(sp1_env_client)),
         _ => unreachable!("Only 'cpu', 'cuda', and 'network' are supported as SP1_PROVER values"),
     }
 }
 
 #[tracing::instrument(level = "info")]
 #[cfg(feature = "prover")]
-fn sp1_cuda_client() -> CudaProver {
+fn charms_sp1_cuda_client() -> CudaProver {
     CudaProver::new(sp1_prover::SP1Prover::new())
 }
 
 #[tracing::instrument(level = "info")]
-fn sp1_cpu_client() -> CpuProver {
+pub fn sp1_cpu_client() -> CpuProver {
     ProverClient::builder().cpu().build()
 }
 
@@ -395,7 +401,7 @@ fn sp1_cpu_client() -> CpuProver {
 fn sp1_env_client() -> BoxedSP1Prover {
     match std::env::var("SP1_PROVER").unwrap_or_default().as_str() {
         #[cfg(feature = "prover")]
-        "cuda" => Box::new(sp1_cuda_client()),
+        "cuda" => Box::new(charms_sp1_cuda_client()),
         _ => Box::new(ProverClient::from_env()),
     }
 }

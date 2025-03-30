@@ -10,8 +10,6 @@ use bitcoin::{
     consensus::encode::{deserialize_hex, serialize_hex},
     Transaction,
 };
-use sp1_prover::components::CpuProverComponents;
-use sp1_sdk::Prover;
 use std::{future::Future, sync::Arc};
 
 pub trait Check {
@@ -28,7 +26,6 @@ pub trait Cast {
 
 pub struct SpellCli {
     pub app_prover: Arc<app::Prover>,
-    pub sp1_client: Arc<Box<dyn Prover<CpuProverComponents>>>,
     pub spell_prover: Arc<spell::Prover>,
 }
 

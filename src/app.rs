@@ -1,4 +1,4 @@
-use crate::utils::BoxedSP1Prover;
+use crate::utils::{BoxedSP1Prover, Shared};
 use anyhow::ensure;
 use charms_data::{is_simple_transfer, util, App, Data, Transaction, B32};
 use sp1_sdk::{
@@ -7,12 +7,12 @@ use sp1_sdk::{
 use std::{collections::BTreeMap, mem, sync::Arc};
 
 pub struct Prover {
-    pub sp1_client: Arc<BoxedSP1Prover>,
+    pub sp1_client: Arc<Shared<BoxedSP1Prover>>,
 }
 
 impl Prover {
     pub fn vk(&self, binary: &[u8]) -> [u8; 32] {
-        let (_pk, vk) = self.sp1_client.setup(&binary);
+        let (_, _, _, vk) = self.sp1_client.get().inner().setup(&binary);
         app_vk(vk)
     }
 }
@@ -27,7 +27,9 @@ fn app_vk(sp1_vk: SP1VerifyingKey) -> [u8; 32] {
 impl Prover {
     pub fn new() -> Self {
         Self {
-            sp1_client: Arc::new(Box::new(ProverClient::builder().cpu().build())),
+            sp1_client: Arc::new(Shared::new(|| {
+                Box::new(ProverClient::builder().cpu().build())
+            })),
         }
     }
 
@@ -42,7 +44,7 @@ impl Prover {
         let pk_vks = app_binaries
             .iter()
             .map(|(vk_hash, binary)| {
-                let (pk, vk) = self.sp1_client.setup(binary);
+                let (pk, vk) = self.sp1_client.get().setup(binary);
                 (vk_hash, (pk, vk))
             })
             .collect::<BTreeMap<_, _>>();
@@ -57,9 +59,10 @@ impl Prover {
             let empty = Data::empty();
             let w = app_private_inputs.get(app).unwrap_or(&empty);
             app_stdin.write_vec(util::write(&(app, &tx, x, w))?);
-            let app_proof = self
-                .sp1_client
-                .prove(pk, &app_stdin, SP1ProofMode::Compressed)?;
+            let app_proof =
+                self.sp1_client
+                    .get()
+                    .prove(pk, &app_stdin, SP1ProofMode::Compressed)?;
 
             let SP1Proof::Compressed(compressed_proof) = app_proof.proof else {
                 unreachable!()
@@ -95,12 +98,13 @@ impl Prover {
                             .map(|v| SP1Context::builder().max_cycles(v).build())
                             .unwrap_or_default();
 
-                        tracing::info!("running app: {:?}", app);
+                        tracing::info!("running app: {}", app);
 
-                        let (committed_values, report) =
-                            self.sp1_client
-                                .inner()
-                                .execute(app_binary, &app_stdin, sp1_context)?;
+                        let (committed_values, report) = self.sp1_client.get().inner().execute(
+                            app_binary,
+                            &app_stdin,
+                            sp1_context,
+                        )?;
 
                         let cycles = report.total_instruction_count();
                         if let Some(expected_cycles) = expected_cycles {
@@ -153,12 +157,12 @@ impl Prover {
         x: &Data,
         w: &Data,
     ) -> anyhow::Result<()> {
-        let (_pk, vk) = self.sp1_client.setup(app_binary);
+        let (_pk, vk) = self.sp1_client.get().setup(app_binary);
         ensure!(app.vk == B32(app_vk(vk)), "app.vk mismatch");
 
         let mut app_stdin = SP1Stdin::new();
         app_stdin.write_vec(util::write(&(app, tx, x, w))?);
-        let (committed_values, _report) = self.sp1_client.execute(app_binary, &app_stdin)?;
+        let (committed_values, _report) = self.sp1_client.get().execute(app_binary, &app_stdin)?;
         let com: (App, Transaction, Data) = util::read(committed_values.to_vec().as_slice())?;
         ensure!(
             (&com.0, &com.1, &com.2) == (app, tx, x),

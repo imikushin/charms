@@ -1,4 +1,5 @@
 use sp1_prover::components::CpuProverComponents;
+use std::sync::OnceLock;
 use tokio::sync::OnceCell;
 
 pub(crate) mod logger;
@@ -29,5 +30,23 @@ impl<T> AsyncShared<T> {
     pub async fn get(&self) -> &T {
         let create = self.create;
         self.instance.get_or_init(|| async { create() }).await
+    }
+}
+
+pub struct Shared<T> {
+    pub create: fn() -> T,
+    pub instance: OnceLock<T>,
+}
+
+impl<T> Shared<T> {
+    pub fn new(create: fn() -> T) -> Self {
+        Self {
+            create,
+            instance: OnceLock::new(),
+        }
+    }
+
+    pub fn get(&self) -> &T {
+        self.instance.get_or_init(|| (self.create)())
     }
 }

@@ -1,4 +1,8 @@
-use crate::{app, utils, utils::BoxedSP1Prover, SPELL_CHECKER_BINARY, SPELL_VK};
+use crate::{
+    app, utils,
+    utils::{BoxedSP1Prover, Shared},
+    SPELL_CHECKER_BINARY, SPELL_VK,
+};
 #[cfg(feature = "prover")]
 use crate::{
     tx,
@@ -366,11 +370,17 @@ impl Prove for Prover {
             &mut stdin,
         )?;
 
-        let (pk, _) = self.sp1_client.setup(SPELL_CHECKER_BINARY);
+        let (pk, _) = self.sp1_client.get().setup(SPELL_CHECKER_BINARY);
         // TODO find a way to get cycles count from the prover, remove this
-        let (_, report) = self.sp1_client.execute(SPELL_CHECKER_BINARY, &stdin)?;
+        let (_, report) = self
+            .sp1_client
+            .get()
+            .execute(SPELL_CHECKER_BINARY, &stdin)?;
 
-        let proof = self.sp1_client.prove(&pk, &stdin, SP1ProofMode::Groth16)?;
+        let proof = self
+            .sp1_client
+            .get()
+            .prove(&pk, &stdin, SP1ProofMode::Groth16)?;
         let proof = proof.bytes().into_boxed_slice();
 
         let mut norm_spell2 = norm_spell;
@@ -434,7 +444,7 @@ pub struct ProveRequest {
 
 pub struct Prover {
     pub app_prover: Arc<app::Prover>,
-    pub sp1_client: Arc<BoxedSP1Prover>,
+    pub sp1_client: Arc<Shared<BoxedSP1Prover>>,
     pub charms_fee_settings: Option<CharmsFee>,
     pub charms_prove_api_url: String,
     #[cfg(not(feature = "prover"))]

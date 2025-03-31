@@ -1,19 +1,18 @@
+#[cfg(feature = "prover")]
+use crate::tx::add_spell;
 use crate::{
-    app, utils,
+    app, tx,
+    tx::txs_by_txid,
+    utils,
     utils::{BoxedSP1Prover, Shared},
     SPELL_CHECKER_BINARY, SPELL_VK,
-};
-#[cfg(feature = "prover")]
-use crate::{
-    tx,
-    tx::{add_spell, txs_by_txid},
 };
 use anyhow::{anyhow, ensure, Error};
 #[cfg(not(feature = "prover"))]
 use bitcoin::consensus::encode::deserialize_hex;
-use bitcoin::{address::NetworkUnchecked, hashes::Hash, Address, OutPoint};
 #[cfg(feature = "prover")]
-use bitcoin::{Amount, FeeRate};
+use bitcoin::FeeRate;
+use bitcoin::{address::NetworkUnchecked, hashes::Hash, Address, Amount, OutPoint};
 pub use charms_client::{
     to_tx, NormalizedCharms, NormalizedSpell, NormalizedTransaction, Proof, SpellProverInput,
     CURRENT_VERSION,
@@ -23,10 +22,9 @@ use charms_data::{util, App, Charms, Data, Transaction, TxId, UtxoId, B32};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use sp1_sdk::{SP1ProofMode, SP1Stdin};
-#[cfg(feature = "prover")]
-use std::env;
 use std::{
     collections::{BTreeMap, BTreeSet},
+    env,
     sync::Arc,
 };
 
@@ -513,15 +511,7 @@ impl ProveSpellTx for Prover {
             .map(|fee| fee.fee_address.assume_checked().script_pubkey());
 
         // Calculate fee
-        let charms_fee = charms_fee
-            .as_ref()
-            .map(|_| {
-                Amount::from_sat(
-                    (total_app_cycles + spell_cycles) * fee_sats_per_megacycle() / 1000000
-                        + fee_sats_base(),
-                )
-            })
-            .unwrap_or_default();
+        let charms_fee = get_charms_fee(charms_fee, total_app_cycles, spell_cycles);
 
         // Parse fee rate
         let fee_rate = FeeRate::from_sat_per_kwu((fee_rate * 250.0) as u64);
@@ -547,8 +537,61 @@ impl ProveSpellTx for Prover {
         &self,
         prove_request: ProveRequest,
     ) -> anyhow::Result<[bitcoin::Transaction; 2]> {
-        let client = &self.client;
         let prove_request = self.add_fee(prove_request);
+        let prev_txs_by_id = txs_by_txid(prove_request.prev_txs.clone());
+
+        let tx = tx::from_spell(&prove_request.spell);
+        ensure!(tx
+            .input
+            .iter()
+            .all(|input| prev_txs_by_id.contains_key(&input.previous_output.txid)));
+
+        let (norm_spell, app_private_inputs) = prove_request.spell.normalized()?;
+
+        let prev_spells = charms_client::prev_spells(&prove_request.prev_txs, SPELL_VK);
+        let charms_tx = to_tx(&norm_spell, &prev_spells);
+
+        let expected_cycles = self.app_prover.run_all(
+            &prove_request.binaries,
+            &charms_tx,
+            &norm_spell.app_public_inputs,
+            &app_private_inputs,
+            None,
+        )?;
+        let total_app_cycles: u64 = expected_cycles.iter().sum();
+
+        let charms_fee =
+            get_charms_fee(prove_request.charms_fee.clone(), total_app_cycles, 8000000).to_sat();
+
+        let total_sats_in = tx
+            .input
+            .iter()
+            .map(|i| {
+                prev_txs_by_id
+                    .get(&i.previous_output.txid)
+                    .map(|prev_tx| prev_tx.output[i.previous_output.vout as usize].value)
+                    .unwrap_or_default()
+            })
+            .sum::<Amount>()
+            .to_sat();
+        let total_sats_out = tx.output.iter().map(|o| o.value).sum::<Amount>().to_sat();
+
+        let funding_utxo_sats = prove_request.funding_utxo_value;
+
+        ensure!(
+            total_sats_in + funding_utxo_sats > total_sats_out + charms_fee,
+            "total input value must be greater than total output value plus charms fee"
+        );
+
+        tracing::info!(
+            "tx input sats: {}, funding utxo sats: {}, total output sats: {}, charms fee estimate: {}",
+            total_sats_in,
+            funding_utxo_sats,
+            total_sats_out,
+            charms_fee
+        );
+
+        let client = &self.client;
         let response = client
             .post(&self.charms_prove_api_url)
             .json(&prove_request)
@@ -569,14 +612,28 @@ impl Prover {
     }
 }
 
-#[cfg(feature = "prover")]
+fn get_charms_fee(
+    charms_fee: Option<CharmsFee>,
+    total_app_cycles: u64,
+    spell_cycles: u64,
+) -> Amount {
+    charms_fee
+        .as_ref()
+        .map(|_| {
+            Amount::from_sat(
+                (total_app_cycles + spell_cycles) * fee_sats_per_megacycle() / 1000000
+                    + fee_sats_base(),
+            )
+        })
+        .unwrap_or_default()
+}
+
 fn fee_sats_per_megacycle() -> u64 {
     env::var("CHARMS_FEE_RATE")
         .map(|s| s.parse::<u64>().unwrap())
         .unwrap_or(1000)
 }
 
-#[cfg(feature = "prover")]
 fn fee_sats_base() -> u64 {
     env::var("CHARMS_FEE_BASE")
         .map(|s| s.parse::<u64>().unwrap())

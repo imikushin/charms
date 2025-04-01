@@ -1,6 +1,6 @@
 [package]
-name = "toad-token"
-description = "A simple token Charms app"
+name = "panoramix-charm"
+description = "A simple Charms app"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"

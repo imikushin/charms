@@ -8,11 +8,14 @@ use crate::{
     SPELL_CHECKER_BINARY, SPELL_VK,
 };
 use anyhow::{anyhow, ensure, Error};
-#[cfg(not(feature = "prover"))]
-use bitcoin::consensus::encode::deserialize_hex;
 #[cfg(feature = "prover")]
 use bitcoin::FeeRate;
-use bitcoin::{address::NetworkUnchecked, hashes::Hash, Address, Amount, OutPoint};
+use bitcoin::{
+    address::NetworkUnchecked,
+    consensus::encode::{deserialize_hex, serialize_hex},
+    hashes::Hash,
+    Address, Amount, OutPoint,
+};
 pub use charms_client::{
     to_tx, NormalizedCharms, NormalizedSpell, NormalizedTransaction, Proof, SpellProverInput,
     CURRENT_VERSION,
@@ -21,6 +24,7 @@ use charms_data::{util, App, Charms, Data, Transaction, TxId, UtxoId, B32};
 #[cfg(not(feature = "prover"))]
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use serde_with::{base64::Base64, serde_as, IfIsHumanReadable};
 use sp1_sdk::{SP1ProofMode, SP1Stdin};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -428,10 +432,20 @@ pub struct CharmsFee {
     pub fee_base: u64,
 }
 
+serde_with::serde_conv!(
+    TxHex,
+    bitcoin::Transaction,
+    |tx: &bitcoin::Transaction| serialize_hex(tx),
+    |s: &str| deserialize_hex(s).map_err(|e| anyhow!(e))
+);
+
+#[serde_as]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ProveRequest {
     pub spell: Spell,
+    #[serde_as(as = "IfIsHumanReadable<BTreeMap<_, Base64>>")]
     pub binaries: BTreeMap<B32, Vec<u8>>,
+    #[serde_as(as = "IfIsHumanReadable<Vec<TxHex>>")]
     pub prev_txs: Vec<bitcoin::Transaction>,
     pub funding_utxo: OutPoint,
     pub funding_utxo_value: u64,

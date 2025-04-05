@@ -28,6 +28,7 @@ hex = { workspace = true }
 reqwest = { version = "0.12.15", features = ["json"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+serde_with = { version = "3.12.0", features = ["base64"] }
 serde_yaml = { workspace = true }
 sp1-core-executor = { workspace = true }
 sp1-core-machine = { workspace = true }

@@ -21,7 +21,7 @@ Install Charms CLI:
 
 ```sh
 export CARGO_TARGET_DIR=$(mktemp -d)/target
-cargo install --locked charms --version=0.3.0
+cargo install --locked charms
 ```
 
 Create your first app (your own token on Bitcoin):

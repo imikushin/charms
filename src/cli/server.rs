@@ -93,7 +93,7 @@ async fn cors_middleware(request: axum::http::Request<Body>, next: Next) -> Resp
     );
     headers.insert(
         header::ACCESS_CONTROL_ALLOW_METHODS,
-        HeaderValue::from_static("GET, PUT, OPTIONS"),
+        HeaderValue::from_static("GET, PUT, POST, OPTIONS"),
     );
     headers.insert(
         header::ACCESS_CONTROL_ALLOW_HEADERS,

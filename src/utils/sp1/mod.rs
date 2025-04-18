@@ -65,6 +65,7 @@ impl Prover<CpuProverComponents> for CudaProver {
                 proof: SP1Proof::Core(proof.proof.0),
                 public_values: proof.public_values,
                 sp1_version: self.version().to_string(),
+                tee_proof: None,
             });
         }
 
@@ -81,6 +82,7 @@ impl Prover<CpuProverComponents> for CudaProver {
                 proof: SP1Proof::Compressed(Box::new(reduce_proof)),
                 public_values,
                 sp1_version: self.version().to_string(),
+                tee_proof: None,
             });
         }
 
@@ -100,6 +102,7 @@ impl Prover<CpuProverComponents> for CudaProver {
                 proof: SP1Proof::Groth16(proof),
                 public_values,
                 sp1_version: self.version().to_string(),
+                tee_proof: None,
             });
         }
 

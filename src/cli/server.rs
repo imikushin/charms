@@ -9,8 +9,8 @@ use anyhow::Result;
 use axum::{
     body::Body,
     extract::State,
-    http::{header, HeaderValue, StatusCode},
-    middleware::{self, Next},
+    http::{header, HeaderValue, Method, StatusCode},
+    middleware::Next,
     response::Response,
     routing::{get, post},
     Json, Router,
@@ -25,7 +25,8 @@ use bitcoincore_rpc::{jsonrpc::Error::Rpc, Auth, Client, RpcApi};
 use serde::{Deserialize, Serialize};
 #[cfg(not(feature = "prover"))]
 use std::str::FromStr;
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
+use tower_http::cors::{Any, CorsLayer};
 
 pub struct Server {
     pub config: ServerConfig,
@@ -38,6 +39,23 @@ pub struct Server {
 #[derive(Debug, Serialize, Deserialize)]
 struct ShowSpellRequest {
     tx_hex: String,
+}
+
+/// Creates a permissive CORS configuration layer for the API server.
+///
+/// This configuration:
+/// - Allows requests from any origin
+/// - Allows all HTTP methods
+/// - Allows all headers to be sent
+/// - Exposes all headers to the client
+/// - Sets a max age of 1 hour (3600 seconds) for preflight requests
+fn cors_layer() -> CorsLayer {
+    CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any)
+        .expose_headers(Any)
+        .max_age(Duration::from_secs(3600))
 }
 
 impl Server {
@@ -71,7 +89,7 @@ impl Server {
             .route("/spells/prove", post(prove_spell))
             .with_state(self.prover.clone())
             .route("/ready", get(|| async { "OK" }))
-            .layer(middleware::from_fn(cors_middleware));
+            .layer(cors_layer());
 
         // Run server
         let addr = format!("{}:{}", ip, port);
@@ -81,26 +99,6 @@ impl Server {
         axum::serve(listener, app).await?;
         Ok(())
     }
-}
-
-async fn cors_middleware(request: axum::http::Request<Body>, next: Next) -> Response {
-    let mut response = next.run(request).await;
-
-    let headers = response.headers_mut();
-    headers.insert(
-        header::ACCESS_CONTROL_ALLOW_ORIGIN,
-        HeaderValue::from_static("*"),
-    );
-    headers.insert(
-        header::ACCESS_CONTROL_ALLOW_METHODS,
-        HeaderValue::from_static("GET, PUT, POST, OPTIONS"),
-    );
-    headers.insert(
-        header::ACCESS_CONTROL_ALLOW_HEADERS,
-        HeaderValue::from_static("Content-Type"),
-    );
-
-    response
 }
 
 // Handlers

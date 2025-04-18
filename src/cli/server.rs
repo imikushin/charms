@@ -7,11 +7,8 @@ use crate::{
 use crate::{spell::Spell, tx::norm_spell};
 use anyhow::Result;
 use axum::{
-    body::Body,
     extract::State,
-    http::{header, HeaderValue, Method, StatusCode},
-    middleware::Next,
-    response::Response,
+    http::{StatusCode},
     routing::{get, post},
     Json, Router,
 };

@@ -33,7 +33,7 @@ pub struct NormalizedTransaction {
     /// Reference UTXO list. **May** be empty.
     pub refs: BTreeSet<UtxoId>,
     /// Output charms. **Must** be in the order of the transaction outputs.
-    /// When proving correctness of a spell, we can't know the transaction ID yet.
+    /// When proving spell correctness, we can't know the transaction ID yet.
     /// We only know the index of each output charm.
     /// **Must** be in the order of the hosting transaction's outputs.
     /// **Must not** be larger than the number of outputs in the hosting transaction.
@@ -49,7 +49,7 @@ impl NormalizedTransaction {
     }
 }
 
-/// Proof of correctness of a spell.
+/// Proof of spell correctness.
 pub type Proof = Box<[u8]>;
 
 /// Normalized representation of a spell.

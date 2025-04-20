@@ -42,6 +42,7 @@ tracing = { workspace = true }
 tracing-forest = { version = "0.1.6" }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 twirp = { package = "twirp-rs", version = "0.13.0-succinct" }
+whisky = { version = "1.0.3" }
 
 [features]
 prover = ["sp1-sdk/native-gnark", "sp1-prover/native-gnark"]
@@ -93,5 +94,7 @@ opt-level = 3
 strip = "debuginfo"
 
 [patch.crates-io]
+cardano-serialization-lib = { git = "https://github.com/imikushin/cardano-serialization-lib", branch = "update-wasm-bindgen" }
 ecdsa-core = { git = "https://github.com/sp1-patches/signatures", package = "ecdsa", tag = "patch-0.16.9-sp1-4.0.0" }
 secp256k1 = { git = "https://github.com/sp1-patches/rust-secp256k1", tag = "patch-0.29.1-sp1-4.0.0" }
+whisky = { git = "https://github.com/imikushin/whisky", branch = "update-wasm-bindgen"}

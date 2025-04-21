@@ -1430,6 +1430,7 @@ dependencies = [
  "bincode",
  "bitcoin",
  "bitcoincore-rpc",
+ "cardano-serialization-lib",
  "charms-client",
  "charms-data",
  "clap",
@@ -1463,6 +1464,7 @@ version = "0.6.0"
 dependencies = [
  "anyhow",
  "bitcoin",
+ "cardano-serialization-lib",
  "charms-data",
  "serde",
  "sp1-primitives",

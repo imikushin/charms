@@ -10,6 +10,7 @@ license.workspace = true
 [dependencies]
 anyhow = { workspace = true }
 bitcoin = { workspace = true, features = ["serde"] }
+cardano-serialization-lib = { workspace = true }
 charms-data = { path = "../charms-data", version = "0.6.0" }
 serde = { workspace = true, features = ["derive"] }
 sp1-primitives = { workspace = true }

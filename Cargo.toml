@@ -20,6 +20,7 @@ axum = { version = "0.8.3", features = ["http2"] }
 bincode = { version = "1.3.3" }
 bitcoin = { workspace = true, features = ["rand", "rand-std"] }
 bitcoincore-rpc = { version = "0.19.0" }
+cardano-serialization-lib = { workspace = true }
 charms-client = { path = "./charms-client", version = "0.6.0" }
 charms-data = { path = "./charms-data", version = "0.6.0" }
 clap = { version = "4.5.36", features = ["derive"] }
@@ -42,7 +43,7 @@ tracing = { workspace = true }
 tracing-forest = { version = "0.1.6" }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 twirp = { package = "twirp-rs", version = "0.13.0-succinct" }
-whisky = { version = "1.0.3" }
+whisky = { workspace = true }
 
 [features]
 prover = ["sp1-sdk/native-gnark", "sp1-prover/native-gnark"]
@@ -65,6 +66,7 @@ resolver = "2"
 [workspace.dependencies]
 anyhow = { version = "1.0.98" }
 bitcoin = { version = "0.32.5" }
+cardano-serialization-lib = { version = "14.1.1" }
 ciborium = { version = "0.2.2" }
 ciborium-io = { version = "0.2.2" }
 hex = { version = "0.4.3" }
@@ -83,6 +85,7 @@ sp1-verifier = { version = "4.2.0" }
 sp1-zkvm = { version = "4.2.0" }
 test-strategy = { version = "0.4.1" }
 tracing = { version = "0.1" }
+whisky = { version = "1.0.3" }
 
 [profile.test]
 lto = "off"
@@ -97,4 +100,4 @@ strip = "debuginfo"
 cardano-serialization-lib = { git = "https://github.com/imikushin/cardano-serialization-lib", branch = "update-wasm-bindgen" }
 ecdsa-core = { git = "https://github.com/sp1-patches/signatures", package = "ecdsa", tag = "patch-0.16.9-sp1-4.0.0" }
 secp256k1 = { git = "https://github.com/sp1-patches/rust-secp256k1", tag = "patch-0.29.1-sp1-4.0.0" }
-whisky = { git = "https://github.com/imikushin/whisky", branch = "update-wasm-bindgen"}
+whisky = { git = "https://github.com/imikushin/whisky", branch = "update-wasm-bindgen" }

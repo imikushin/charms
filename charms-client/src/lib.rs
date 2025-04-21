@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
 pub mod bitcoin_tx;
+pub mod cardano_tx;
 pub mod tx;
 
 /// Version `0` of the protocol.

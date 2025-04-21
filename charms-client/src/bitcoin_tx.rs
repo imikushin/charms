@@ -1,0 +1,112 @@
+use crate::{tx::EnchantedTx, NormalizedSpell, Proof};
+use anyhow::{anyhow, bail, ensure};
+use bitcoin::{
+    hashes::Hash,
+    opcodes::all::{OP_ENDIF, OP_IF},
+    script::{Instruction, PushBytes},
+    TxIn,
+};
+use charms_data::{util, TxId, UtxoId};
+use sp1_verifier::Groth16Verifier;
+
+pub struct BitcoinTx(pub bitcoin::Transaction);
+
+impl EnchantedTx for BitcoinTx {
+    fn extract_and_verify_spell(&self, spell_vk: &str) -> anyhow::Result<NormalizedSpell> {
+        let tx = &self.0;
+
+        let Some((spell_tx_in, tx_ins)) = tx.input.split_last() else {
+            bail!("transaction does not have inputs")
+        };
+
+        let (spell, proof) = parse_spell_and_proof(spell_tx_in)?;
+
+        ensure!(
+            &spell.tx.outs.len() <= &tx.output.len(),
+            "spell tx outs mismatch"
+        );
+        ensure!(
+            &spell.tx.ins.is_none(),
+            "spell must inherit inputs from the enchanted tx"
+        );
+
+        let spell = spell_with_ins(spell, tx_ins);
+
+        let (spell_vk, groth16_vk) = crate::tx::vks(spell.version, spell_vk)?;
+
+        Groth16Verifier::verify(
+            &proof,
+            crate::tx::to_sp1_pv(spell.version, &(spell_vk, &spell)).as_slice(),
+            spell_vk,
+            groth16_vk,
+        )
+        .map_err(|e| anyhow!("could not verify spell proof: {}", e))?;
+
+        Ok(spell)
+    }
+}
+
+#[tracing::instrument(level = "debug", skip_all)]
+pub(crate) fn spell_with_ins(spell: NormalizedSpell, spell_tx_ins: &[TxIn]) -> NormalizedSpell {
+    let tx_ins = spell_tx_ins // exclude spell commitment input
+        .iter()
+        .map(|tx_in| {
+            let out_point = tx_in.previous_output;
+            UtxoId(TxId(out_point.txid.to_byte_array()), out_point.vout)
+        })
+        .collect();
+
+    let mut spell = spell;
+    spell.tx.ins = Some(tx_ins);
+
+    spell
+}
+
+#[tracing::instrument(level = "debug", skip_all)]
+pub fn parse_spell_and_proof(spell_tx_in: &TxIn) -> anyhow::Result<(NormalizedSpell, Proof)> {
+    ensure!(
+        spell_tx_in
+            .witness
+            .taproot_control_block()
+            .ok_or(anyhow!("no control block"))?
+            .len()
+            == 33,
+        "the Taproot tree contains more than one leaf: only a single script is supported"
+    );
+
+    let script = spell_tx_in
+        .witness
+        .tapscript()
+        .ok_or(anyhow!("no spell data in the last input's witness"))?;
+
+    let mut instructions = script.instructions();
+
+    ensure!(instructions.next() == Some(Ok(Instruction::PushBytes(PushBytes::empty()))));
+    ensure!(instructions.next() == Some(Ok(Instruction::Op(OP_IF))));
+    let Some(Ok(Instruction::PushBytes(push_bytes))) = instructions.next() else {
+        bail!("no spell data")
+    };
+    if push_bytes.as_bytes() != b"spell" {
+        bail!("no spell marker")
+    }
+
+    let mut spell_data = vec![];
+
+    loop {
+        match instructions.next() {
+            Some(Ok(Instruction::PushBytes(push_bytes))) => {
+                spell_data.extend(push_bytes.as_bytes());
+            }
+            Some(Ok(Instruction::Op(OP_ENDIF))) => {
+                break;
+            }
+            _ => {
+                bail!("unexpected opcode")
+            }
+        }
+    }
+
+    let (spell, proof): (NormalizedSpell, Proof) = util::read(spell_data.as_slice())
+        .map_err(|e| anyhow!("could not parse spell and proof: {}", e))?;
+    Ok((spell, proof))
+}

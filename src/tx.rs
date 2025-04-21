@@ -16,7 +16,7 @@ use bitcoin::{
     Amount, FeeRate, OutPoint, ScriptBuf, TapLeafHash, TapSighashType, Transaction, TxIn, TxOut,
     Txid, Weight, Witness, XOnlyPublicKey,
 };
-use charms_client::NormalizedSpell;
+use charms_client::{tx::EnchantedTx, NormalizedSpell};
 use std::collections::BTreeMap;
 
 /// `add_spell` adds `spell` to `tx`:
@@ -223,8 +223,8 @@ fn append_witness_data(
 }
 
 #[tracing::instrument(level = "debug", skip_all)]
-pub fn norm_spell(tx: &Transaction) -> Option<NormalizedSpell> {
-    charms_client::tx::extract_and_verify_spell(&tx, SPELL_VK)
+pub fn norm_spell(tx: &impl EnchantedTx) -> Option<NormalizedSpell> {
+    charms_client::tx::extract_and_verify_spell(SPELL_VK, tx)
         .map_err(|e| {
             tracing::debug!("spell verification failed: {:?}", e);
             e
@@ -233,7 +233,7 @@ pub fn norm_spell(tx: &Transaction) -> Option<NormalizedSpell> {
 }
 
 #[tracing::instrument(level = "debug", skip_all)]
-pub fn spell(tx: &Transaction) -> Option<Spell> {
+pub fn spell(tx: &impl EnchantedTx) -> Option<Spell> {
     match norm_spell(tx) {
         Some(norm_spell) => Some(Spell::denormalized(&norm_spell)),
         None => None,

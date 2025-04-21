@@ -4,6 +4,7 @@ use bitcoin::{
     consensus::encode::{deserialize_hex, serialize_hex},
     OutPoint, Transaction,
 };
+use charms_client::bitcoin_tx::BitcoinTx;
 use std::process::Command;
 
 pub(crate) fn parse_outpoint(s: &str) -> Result<OutPoint> {
@@ -18,7 +19,7 @@ pub(crate) fn parse_outpoint(s: &str) -> Result<OutPoint> {
 pub fn tx_show_spell(tx: String, json: bool) -> Result<()> {
     let tx = deserialize_hex::<Transaction>(&tx)?;
 
-    match tx::spell(&tx) {
+    match tx::spell(&BitcoinTx(tx)) {
         Some(spell) => cli::print_output(&spell, json)?,
         None => eprintln!("No spell found in the transaction"),
     }

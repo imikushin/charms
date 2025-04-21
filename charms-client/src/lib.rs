@@ -1,9 +1,10 @@
-use crate::tx::extract_and_verify_spell;
+use crate::{bitcoin_tx::BitcoinTx, tx::extract_and_verify_spell};
 use bitcoin::hashes::Hash;
 use charms_data::{App, Charms, Data, Transaction, TxId, UtxoId};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
+pub mod bitcoin_tx;
 pub mod tx;
 
 /// Version `0` of the protocol.
@@ -77,7 +78,7 @@ pub fn prev_spells(
             (
                 tx_id,
                 (
-                    extract_and_verify_spell(tx, spell_vk)
+                    extract_and_verify_spell(spell_vk, &BitcoinTx(tx.clone())) // TODO remove clone
                         .map_err(|e| {
                             tracing::info!("no correct spell in tx {}: {}", tx_id, e);
                         })

@@ -1,118 +1,24 @@
-use crate::{NormalizedSpell, Proof, CURRENT_VERSION, V0, V0_SPELL_VK, V1, V1_SPELL_VK};
-use anyhow::{anyhow, bail, ensure};
-use bitcoin::{
-    hashes::{serde::Serialize, Hash},
-    opcodes::all::{OP_ENDIF, OP_IF},
-    script::{Instruction, PushBytes},
-    TxIn,
-};
-use charms_data::{util, TxId, UtxoId};
+use crate::{NormalizedSpell, CURRENT_VERSION, V0, V0_SPELL_VK, V1, V1_SPELL_VK};
+use anyhow::bail;
+use bitcoin::hashes::serde::Serialize;
+use charms_data::util;
 use sp1_primitives::io::SP1PublicValues;
-use sp1_verifier::Groth16Verifier;
+
+pub trait EnchantedTx {
+    fn extract_and_verify_spell(&self, spell_vk: &str) -> anyhow::Result<NormalizedSpell>;
+}
 
 /// Extract a [`NormalizedSpell`] from a transaction and verify it.
 /// Incorrect spells are rejected.
 #[tracing::instrument(level = "debug", skip_all)]
 pub fn extract_and_verify_spell(
-    tx: &bitcoin::Transaction,
     spell_vk: &str,
+    enchanted_tx: &impl EnchantedTx,
 ) -> anyhow::Result<NormalizedSpell> {
-    let Some((spell_tx_in, tx_ins)) = tx.input.split_last() else {
-        bail!("transaction does not have inputs")
-    };
-
-    let (spell, proof) = parse_spell_and_proof(spell_tx_in)?;
-
-    ensure!(
-        &spell.tx.outs.len() <= &tx.output.len(),
-        "spell tx outs mismatch"
-    );
-    ensure!(
-        &spell.tx.ins.is_none(),
-        "spell must inherit inputs from the enchanted tx"
-    );
-
-    let spell = spell_with_ins(spell, tx_ins);
-
-    let (spell_vk, groth16_vk) = vks(spell.version, spell_vk)?;
-
-    Groth16Verifier::verify(
-        &proof,
-        to_sp1_pv(spell.version, &(spell_vk, &spell)).as_slice(),
-        spell_vk,
-        groth16_vk,
-    )
-    .map_err(|e| anyhow!("could not verify spell proof: {}", e))?;
-
-    Ok(spell)
+    enchanted_tx.extract_and_verify_spell(spell_vk)
 }
 
-#[tracing::instrument(level = "debug", skip_all)]
-fn spell_with_ins(spell: NormalizedSpell, spell_tx_ins: &[TxIn]) -> NormalizedSpell {
-    let tx_ins = spell_tx_ins // exclude spell commitment input
-        .iter()
-        .map(|tx_in| {
-            let out_point = tx_in.previous_output;
-            UtxoId(TxId(out_point.txid.to_byte_array()), out_point.vout)
-        })
-        .collect();
-
-    let mut spell = spell;
-    spell.tx.ins = Some(tx_ins);
-
-    spell
-}
-
-#[tracing::instrument(level = "debug", skip_all)]
-pub fn parse_spell_and_proof(spell_tx_in: &TxIn) -> anyhow::Result<(NormalizedSpell, Proof)> {
-    ensure!(
-        spell_tx_in
-            .witness
-            .taproot_control_block()
-            .ok_or(anyhow!("no control block"))?
-            .len()
-            == 33,
-        "the Taproot tree contains more than one leaf: only a single script is supported"
-    );
-
-    let script = spell_tx_in
-        .witness
-        .tapscript()
-        .ok_or(anyhow!("no spell data in the last input's witness"))?;
-
-    let mut instructions = script.instructions();
-
-    ensure!(instructions.next() == Some(Ok(Instruction::PushBytes(PushBytes::empty()))));
-    ensure!(instructions.next() == Some(Ok(Instruction::Op(OP_IF))));
-    let Some(Ok(Instruction::PushBytes(push_bytes))) = instructions.next() else {
-        bail!("no spell data")
-    };
-    if push_bytes.as_bytes() != b"spell" {
-        bail!("no spell marker")
-    }
-
-    let mut spell_data = vec![];
-
-    loop {
-        match instructions.next() {
-            Some(Ok(Instruction::PushBytes(push_bytes))) => {
-                spell_data.extend(push_bytes.as_bytes());
-            }
-            Some(Ok(Instruction::Op(OP_ENDIF))) => {
-                break;
-            }
-            _ => {
-                bail!("unexpected opcode")
-            }
-        }
-    }
-
-    let (spell, proof): (NormalizedSpell, Proof) = util::read(spell_data.as_slice())
-        .map_err(|e| anyhow!("could not parse spell and proof: {}", e))?;
-    Ok((spell, proof))
-}
-
-fn vks(spell_version: u32, spell_vk: &str) -> anyhow::Result<(&str, &[u8])> {
+pub fn vks(spell_version: u32, spell_vk: &str) -> anyhow::Result<(&str, &[u8])> {
     match spell_version {
         CURRENT_VERSION => Ok((spell_vk, *sp1_verifier::GROTH16_VK_BYTES)),
         V1 => Ok((V1_SPELL_VK, *sp1_verifier::GROTH16_VK_BYTES)),
@@ -121,9 +27,9 @@ fn vks(spell_version: u32, spell_vk: &str) -> anyhow::Result<(&str, &[u8])> {
     }
 }
 
-const V0_GROTH16_VK_BYTES: &'static [u8] = include_bytes!("../vk/v0/groth16_vk.bin");
+pub const V0_GROTH16_VK_BYTES: &'static [u8] = include_bytes!("../vk/v0/groth16_vk.bin");
 
-fn to_sp1_pv<T: Serialize>(spell_version: u32, t: &T) -> SP1PublicValues {
+pub fn to_sp1_pv<T: Serialize>(spell_version: u32, t: &T) -> SP1PublicValues {
     let mut pv = SP1PublicValues::new();
     match spell_version {
         CURRENT_VERSION => {

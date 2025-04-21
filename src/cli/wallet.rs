@@ -7,6 +7,7 @@ use crate::{
 };
 use anyhow::{ensure, Result};
 use bitcoin::{address::NetworkUnchecked, hashes::Hash, Address, OutPoint, Transaction};
+use charms_client::bitcoin_tx::BitcoinTx;
 use charms_data::{App, Data, TxId, UtxoId};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -88,8 +89,9 @@ fn txs_with_spells(txid_iter: impl Iterator<Item = String>) -> Result<BTreeMap<T
         })
         .map(|tx_result: Result<Transaction>| {
             let tx = tx_result?;
-            let spell_opt = tx::spell(&tx);
-            Ok(spell_opt.map(|spell| (TxId(tx.compute_txid().to_byte_array()), spell)))
+            let txid = tx.compute_txid();
+            let spell_opt = tx::spell(&BitcoinTx(tx));
+            Ok(spell_opt.map(|spell| (TxId(txid.to_byte_array()), spell)))
         })
         .filter_map(|tx_result| match tx_result {
             Ok(Some(v)) => Some(Ok(v)),

@@ -6,19 +6,20 @@ use crate::{
 #[cfg(not(feature = "prover"))]
 use crate::{spell::Spell, tx::norm_spell};
 use anyhow::Result;
+#[cfg(not(feature = "prover"))]
+use axum::{extract::Path, routing::put};
 use axum::{
     extract::State,
-    http::{StatusCode},
+    http::StatusCode,
     routing::{get, post},
     Json, Router,
 };
-#[cfg(not(feature = "prover"))]
-use axum::{extract::Path, routing::put};
 #[cfg(not(feature = "prover"))]
 use bitcoin::consensus::encode::deserialize_hex;
 use bitcoin::consensus::encode::serialize_hex;
 #[cfg(not(feature = "prover"))]
 use bitcoincore_rpc::{jsonrpc::Error::Rpc, Auth, Client, RpcApi};
+use charms_client::{bitcoin_tx::BitcoinTx, tx::EnchantedTx};
 use serde::{Deserialize, Serialize};
 #[cfg(not(feature = "prover"))]
 use std::str::FromStr;
@@ -146,7 +147,7 @@ fn get_spell(rpc: Arc<Client>, txid: &str) -> Result<Spell, StatusCode> {
     let txid = bitcoin::Txid::from_str(txid).map_err(|_| StatusCode::BAD_REQUEST)?;
 
     match rpc.get_raw_transaction(&txid, None) {
-        Ok(tx) => extract_spell(&tx),
+        Ok(tx) => extract_spell(&BitcoinTx(tx)),
         Err(e) => match e {
             bitcoincore_rpc::Error::JsonRpc(Rpc(rpc_error)) if rpc_error.code == -5 => {
                 Err(StatusCode::NOT_FOUND)
@@ -167,12 +168,12 @@ fn show_spell(txid: &str, request: &ShowSpellRequest) -> Result<Spell, StatusCod
     if tx.compute_txid() != txid {
         return Err(StatusCode::BAD_REQUEST);
     }
-    extract_spell(&tx)
+    extract_spell(&BitcoinTx(tx))
 }
 
 #[cfg(not(feature = "prover"))]
-fn extract_spell(tx: &bitcoin::Transaction) -> Result<Spell, StatusCode> {
-    match norm_spell(&tx) {
+fn extract_spell(tx: &impl EnchantedTx) -> Result<Spell, StatusCode> {
+    match norm_spell(tx) {
         None => Err(StatusCode::NO_CONTENT),
         Some(spell) => Ok(Spell::denormalized(&spell)),
     }

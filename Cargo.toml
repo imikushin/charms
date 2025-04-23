@@ -43,7 +43,7 @@ tracing = { workspace = true }
 tracing-forest = { version = "0.1.6" }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 twirp = { package = "twirp-rs", version = "0.13.0-succinct" }
-whisky = { workspace = true }
+#whisky = { workspace = true }
 
 [features]
 prover = ["sp1-sdk/native-gnark", "sp1-prover/native-gnark"]
@@ -85,7 +85,7 @@ sp1-verifier = { version = "4.2.0" }
 sp1-zkvm = { version = "4.2.0" }
 test-strategy = { version = "0.4.1" }
 tracing = { version = "0.1" }
-whisky = { version = "1.0.3" }
+#whisky = { version = "1.0.3" }
 
 [profile.test]
 lto = "off"
@@ -100,4 +100,4 @@ strip = "debuginfo"
 cardano-serialization-lib = { git = "https://github.com/imikushin/cardano-serialization-lib", branch = "update-wasm-bindgen" }
 ecdsa-core = { git = "https://github.com/sp1-patches/signatures", package = "ecdsa", tag = "patch-0.16.9-sp1-4.0.0" }
 secp256k1 = { git = "https://github.com/sp1-patches/rust-secp256k1", tag = "patch-0.29.1-sp1-4.0.0" }
-whisky = { git = "https://github.com/imikushin/whisky", branch = "update-wasm-bindgen" }
+#whisky = { git = "https://github.com/imikushin/whisky", branch = "update-wasm-bindgen" }

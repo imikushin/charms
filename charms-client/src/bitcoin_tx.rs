@@ -22,12 +22,12 @@ impl EnchantedTx for BitcoinTx {
         let (spell, proof) = parse_spell_and_proof(spell_tx_in)?;
 
         ensure!(
-            &spell.tx.outs.len() <= &tx.output.len(),
-            "spell tx outs mismatch"
-        );
-        ensure!(
             &spell.tx.ins.is_none(),
             "spell must inherit inputs from the enchanted tx"
+        );
+        ensure!(
+            &spell.tx.outs.len() <= &tx.output.len(),
+            "spell tx outs mismatch"
         );
 
         let spell = spell_with_ins(spell, tx_ins);

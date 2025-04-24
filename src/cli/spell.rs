@@ -40,8 +40,11 @@ impl Prove for SpellCli {
             funding_utxo_value,
             change_address,
             fee_rate,
+            chain,
         }: SpellProveParams,
     ) -> Result<()> {
+        ensure!(chain == "bitcoin", "chain must be bitcoin for now");
+
         // Parse funding UTXO early: to fail fast
         let funding_utxo = cli::tx::parse_outpoint(&funding_utxo)?;
 
@@ -130,8 +133,11 @@ impl Cast for SpellCli {
             app_bins,
             funding_utxo,
             fee_rate,
+            chain,
         }: SpellCastParams,
     ) -> Result<()> {
+        ensure!(chain == "bitcoin", "chain must be bitcoin for now");
+
         // Parse funding UTXO early: to fail fast
         let funding_utxo = cli::tx::parse_outpoint(&funding_utxo)?;
 

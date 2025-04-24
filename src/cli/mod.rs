@@ -135,9 +135,13 @@ pub struct SpellProveParams {
     #[arg(long)]
     change_address: Address<NetworkUnchecked>,
 
-    /// Fee rate in sats/vB.
+    /// Fee rate: in sats/vB for Bitcoin.
     #[arg(long, default_value = "2.0")]
     fee_rate: f64,
+
+    /// Target chain, defaults to `bitcoin`.
+    #[arg(long, default_value = "bitcoin")]
+    chain: String,
 }
 
 #[derive(Args)]
@@ -223,15 +227,22 @@ pub struct SpellCastParams {
     /// Path to spell source file (YAML/JSON).
     #[arg(long, default_value = "/dev/stdin")]
     spell: PathBuf,
+
     /// Path to the apps' RISC-V binaries.
     #[arg(long, value_delimiter = ',')]
     app_bins: Vec<PathBuf>,
+
     /// Funding UTXO ID (`txid:vout`).
     #[arg(long, alias = "funding-utxo-id")]
     funding_utxo: String,
-    /// Fee rate in sats/vB.
+
+    /// Fee rate: in sats/vB for Bitcoin.
     #[arg(long, default_value = "2.0")]
     fee_rate: f64,
+
+    /// Target chain, defaults to `bitcoin`.
+    #[arg(long, default_value = "bitcoin")]
+    chain: String,
 }
 
 #[derive(Subcommand)]

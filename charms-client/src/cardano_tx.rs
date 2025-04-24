@@ -1,9 +1,11 @@
 use crate::{tx::EnchantedTx, NormalizedSpell, Proof};
 use anyhow::{anyhow, ensure};
-use cardano_serialization_lib::{Transaction, TransactionInputs};
+use cardano_serialization_lib::{chain_crypto::Blake2b256, Transaction, TransactionInputs};
 use charms_data::{util, TxId, UtxoId};
+use serde::{Deserialize, Serialize};
 use sp1_verifier::Groth16Verifier;
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CardanoTx(pub Transaction);
 
 impl EnchantedTx for CardanoTx {
@@ -51,6 +53,16 @@ impl EnchantedTx for CardanoTx {
         .map_err(|e| anyhow!("could not verify spell proof: {}", e))?;
 
         Ok(spell)
+    }
+
+    fn tx_outs_len(&self) -> usize {
+        self.0.body().outputs().len()
+    }
+
+    // TODO make sure this is correct
+    fn tx_id(&self) -> TxId {
+        let transaction_hash = Blake2b256::new(&self.0.body().to_bytes());
+        TxId(transaction_hash.into())
     }
 }
 

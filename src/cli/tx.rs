@@ -4,7 +4,7 @@ use bitcoin::{
     consensus::encode::{deserialize_hex, serialize_hex},
     OutPoint, Transaction,
 };
-use charms_client::bitcoin_tx::BitcoinTx;
+use charms_client::{bitcoin_tx::BitcoinTx, tx::Tx};
 use std::process::Command;
 
 pub(crate) fn parse_outpoint(s: &str) -> Result<OutPoint> {
@@ -27,7 +27,7 @@ pub fn tx_show_spell(tx: String, json: bool) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn get_prev_txs(tx: &Transaction) -> Result<Vec<Transaction>> {
+pub(crate) fn get_prev_txs(tx: &Transaction) -> Result<Vec<Tx>> {
     let cmd_output = Command::new("bash")
         .args(&[
             "-c", format!("bitcoin-cli decoderawtransaction {} | jq -r '.vin[].txid' | sort | uniq | xargs -I {{}} bitcoin-cli getrawtransaction {{}} | paste -sd, -", serialize_hex(tx)).as_str()
@@ -35,6 +35,10 @@ pub(crate) fn get_prev_txs(tx: &Transaction) -> Result<Vec<Transaction>> {
         .output()?;
     String::from_utf8(cmd_output.stdout)?
         .split(',')
-        .map(|s| Ok(deserialize_hex::<Transaction>(s.trim())?))
+        .map(|s| {
+            Ok(Tx::Bitcoin(BitcoinTx(deserialize_hex::<Transaction>(
+                s.trim(),
+            )?)))
+        })
         .collect()
 }

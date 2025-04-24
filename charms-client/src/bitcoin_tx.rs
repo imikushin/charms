@@ -7,8 +7,10 @@ use bitcoin::{
     TxIn,
 };
 use charms_data::{util, TxId, UtxoId};
+use serde::{Deserialize, Serialize};
 use sp1_verifier::Groth16Verifier;
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BitcoinTx(pub bitcoin::Transaction);
 
 impl EnchantedTx for BitcoinTx {
@@ -43,6 +45,14 @@ impl EnchantedTx for BitcoinTx {
         .map_err(|e| anyhow!("could not verify spell proof: {}", e))?;
 
         Ok(spell)
+    }
+
+    fn tx_outs_len(&self) -> usize {
+        self.0.output.len()
+    }
+
+    fn tx_id(&self) -> TxId {
+        TxId(self.0.compute_txid().to_byte_array())
     }
 }
 

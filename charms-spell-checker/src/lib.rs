@@ -2,13 +2,16 @@ pub mod app;
 pub mod bin;
 
 use crate::app::AppContractVK;
-use charms_client::NormalizedSpell;
+use charms_client::{
+    tx::{EnchantedTx, Tx},
+    NormalizedSpell,
+};
 use charms_data::App;
 
 /// Check if the spell is correct.
 pub(crate) fn is_correct(
     spell: &NormalizedSpell,
-    prev_txs: &Vec<bitcoin::Transaction>,
+    prev_txs: &Vec<Tx>,
     app_contract_vks: &Vec<(App, AppContractVK)>,
     spell_vk: &String,
 ) -> bool {

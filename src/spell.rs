@@ -16,6 +16,10 @@ use bitcoin::{
     hashes::Hash,
     Address, Amount, OutPoint,
 };
+use charms_client::{
+    bitcoin_tx::BitcoinTx,
+    tx::{EnchantedTx, Tx},
+};
 pub use charms_client::{
     to_tx, NormalizedCharms, NormalizedSpell, NormalizedTransaction, Proof, SpellProverInput,
     CURRENT_VERSION,
@@ -313,7 +317,7 @@ pub trait Prove {
         norm_spell: NormalizedSpell,
         app_binaries: &BTreeMap<B32, Vec<u8>>,
         app_private_inputs: BTreeMap<App, Data>,
-        prev_txs: Vec<bitcoin::Transaction>,
+        prev_txs: Vec<Box<dyn EnchantedTx>>,
         expected_cycles: Option<Vec<u64>>,
     ) -> anyhow::Result<(NormalizedSpell, Proof, u64)>;
 }
@@ -324,7 +328,7 @@ impl Prove for Prover {
         norm_spell: NormalizedSpell,
         app_binaries: &BTreeMap<B32, Vec<u8>>,
         app_private_inputs: BTreeMap<App, Data>,
-        prev_txs: Vec<bitcoin::Transaction>,
+        prev_txs: Vec<Tx>,
         _expected_cycles: Option<Vec<u64>>,
     ) -> anyhow::Result<(NormalizedSpell, Proof, u64)> {
         let mut stdin = SP1Stdin::new();
@@ -446,7 +450,7 @@ pub struct ProveRequest {
     #[serde_as(as = "IfIsHumanReadable<BTreeMap<_, Base64>>")]
     pub binaries: BTreeMap<B32, Vec<u8>>,
     #[serde_as(as = "IfIsHumanReadable<Vec<TxHex>>")]
-    pub prev_txs: Vec<bitcoin::Transaction>,
+    pub prev_txs: Vec<Tx>,
     pub funding_utxo: OutPoint,
     pub funding_utxo_value: u64,
     pub change_address: Address<NetworkUnchecked>,
@@ -500,11 +504,16 @@ impl ProveSpellTx for Prover {
         )?;
         let total_app_cycles: u64 = expected_cycles.iter().sum();
 
+        let prev_txs = prev_txs
+            .into_iter()
+            .map(|tx| Tx::Bitcoin(BitcoinTx(tx)))
+            .collect();
+
         let (norm_spell, proof, spell_cycles) = self.prove(
             norm_spell,
             &binaries,
             app_private_inputs,
-            prev_txs.clone(),
+            prev_txs,
             Some(expected_cycles),
         )?;
 
@@ -555,10 +564,13 @@ impl ProveSpellTx for Prover {
         let prev_txs_by_id = txs_by_txid(prove_request.prev_txs.clone());
 
         let tx = tx::from_spell(&prove_request.spell);
+        // let encoded_tx = EncodedTx::Bitcoin(BitcoinTx(tx.clone()));
         ensure!(tx
+            .0
             .input
             .iter()
-            .all(|input| prev_txs_by_id.contains_key(&input.previous_output.txid)));
+            .all(|input| prev_txs_by_id
+                .contains_key(&TxId(input.previous_output.txid.to_byte_array()))));
 
         let (norm_spell, app_private_inputs) = prove_request.spell.normalized()?;
 
@@ -577,17 +589,17 @@ impl ProveSpellTx for Prover {
         let charms_fee =
             get_charms_fee(prove_request.charms_fee.clone(), total_app_cycles, 8000000).to_sat();
 
-        let total_sats_in = tx
-            .input
-            .iter()
-            .map(|i| {
-                prev_txs_by_id
-                    .get(&i.previous_output.txid)
-                    .map(|prev_tx| prev_tx.output[i.previous_output.vout as usize].value)
-                    .unwrap_or_default()
-            })
-            .sum::<Amount>()
-            .to_sat();
+        let total_sats_in =
+            tx.0.input
+                .iter()
+                .map(|i| {
+                    prev_txs_by_id
+                        .get(&TxId(i.previous_output.txid.to_byte_array()))
+                        .map(|prev_tx| prev_tx.output[i.previous_output.vout as usize].value)
+                        .unwrap_or_default()
+                })
+                .sum::<Amount>()
+                .to_sat();
         let total_sats_out = tx.output.iter().map(|o| o.value).sum::<Amount>().to_sat();
 
         let funding_utxo_sats = prove_request.funding_utxo_value;

@@ -1,11 +1,25 @@
-use crate::{NormalizedSpell, CURRENT_VERSION, V0, V0_SPELL_VK, V1, V1_SPELL_VK};
+use crate::{
+    bitcoin_tx::BitcoinTx, cardano_tx::CardanoTx, NormalizedSpell, CURRENT_VERSION, V0,
+    V0_SPELL_VK, V1, V1_SPELL_VK,
+};
 use anyhow::bail;
-use bitcoin::hashes::serde::Serialize;
-use charms_data::util;
+use charms_data::{util, TxId};
+use enum_dispatch::enum_dispatch;
+use serde::{Deserialize, Serialize};
 use sp1_primitives::io::SP1PublicValues;
 
+#[enum_dispatch]
 pub trait EnchantedTx {
     fn extract_and_verify_spell(&self, spell_vk: &str) -> anyhow::Result<NormalizedSpell>;
+    fn tx_outs_len(&self) -> usize;
+    fn tx_id(&self) -> TxId;
+}
+
+#[enum_dispatch(EnchantedTx)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum Tx {
+    Bitcoin(BitcoinTx),
+    Cardano(CardanoTx),
 }
 
 /// Extract a [`NormalizedSpell`] from a transaction and verify it.

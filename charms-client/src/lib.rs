@@ -1,5 +1,4 @@
-use crate::{bitcoin_tx::BitcoinTx, tx::extract_and_verify_spell};
-use bitcoin::hashes::Hash;
+use crate::tx::{extract_and_verify_spell, EnchantedTx, Tx};
 use charms_data::{App, Charms, Data, Transaction, TxId, UtxoId};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -69,22 +68,22 @@ pub struct NormalizedSpell {
 /// Extract spells from previous transactions.
 #[tracing::instrument(level = "debug", skip(prev_txs, spell_vk))]
 pub fn prev_spells(
-    prev_txs: &Vec<bitcoin::Transaction>,
+    prev_txs: &Vec<Tx>,
     spell_vk: &str,
 ) -> BTreeMap<TxId, (Option<NormalizedSpell>, usize)> {
     prev_txs
         .iter()
         .map(|tx| {
-            let tx_id = TxId(tx.compute_txid().to_byte_array());
+            let tx_id = tx.tx_id();
             (
                 tx_id,
                 (
-                    extract_and_verify_spell(spell_vk, &BitcoinTx(tx.clone())) // TODO remove clone
+                    extract_and_verify_spell(spell_vk, tx)
                         .map_err(|e| {
                             tracing::info!("no correct spell in tx {}: {}", tx_id, e);
                         })
                         .ok(),
-                    tx.output.len(),
+                    tx.tx_outs_len(),
                 ),
             )
         })
@@ -184,7 +183,7 @@ pub fn charms(spell: &NormalizedSpell, n_charms: &NormalizedCharms) -> Charms {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SpellProverInput {
     pub self_spell_vk: String,
-    pub prev_txs: Vec<bitcoin::Transaction>,
+    pub prev_txs: Vec<Tx>,
     pub spell: NormalizedSpell,
     /// indices of apps in the spell that have contract proofs
     pub app_contract_proofs: BTreeSet<usize>, // proofs are provided in input stream data

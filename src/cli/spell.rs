@@ -10,6 +10,7 @@ use bitcoin::{
     consensus::encode::{deserialize_hex, serialize_hex},
     Transaction,
 };
+use charms_client::{bitcoin_tx::BitcoinTx, tx::Tx};
 use std::{future::Future, sync::Arc};
 
 pub trait Check {
@@ -54,7 +55,7 @@ impl Prove for SpellCli {
 
         let prev_txs = prev_txs
             .into_iter()
-            .map(|tx| Ok(deserialize_hex::<Transaction>(&tx)?))
+            .map(|tx| Ok(Tx::Bitcoin(BitcoinTx(deserialize_hex::<Transaction>(&tx)?))))
             .collect::<Result<_>>()?;
 
         let binaries = cli::app::binaries_by_vk(&self.app_prover, app_bins)?;

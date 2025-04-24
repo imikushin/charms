@@ -16,7 +16,12 @@ use bitcoin::{
     Amount, FeeRate, OutPoint, ScriptBuf, TapLeafHash, TapSighashType, Transaction, TxIn, TxOut,
     Txid, Weight, Witness, XOnlyPublicKey,
 };
-use charms_client::{tx::EnchantedTx, NormalizedSpell};
+use charms_client::{
+    bitcoin_tx::BitcoinTx,
+    tx::{EnchantedTx, Tx},
+    NormalizedSpell,
+};
+use charms_data::TxId;
 use std::collections::BTreeMap;
 
 /// `add_spell` adds `spell` to `tx`:
@@ -240,10 +245,10 @@ pub fn spell(tx: &impl EnchantedTx) -> Option<Spell> {
     }
 }
 
-pub fn txs_by_txid(prev_txs: Vec<Transaction>) -> BTreeMap<Txid, Transaction> {
+pub fn txs_by_txid(prev_txs: Vec<Tx>) -> BTreeMap<TxId, Tx> {
     prev_txs
         .into_iter()
-        .map(|prev_tx| (prev_tx.compute_txid(), prev_tx))
+        .map(|prev_tx| (prev_tx.tx_id(), prev_tx))
         .collect::<BTreeMap<_, _>>()
 }
 
@@ -295,7 +300,7 @@ pub fn tx_input(ins: &[Input]) -> Vec<TxIn> {
         .collect()
 }
 
-pub fn from_spell(spell: &Spell) -> Transaction {
+pub fn from_spell(spell: &Spell) -> BitcoinTx {
     let input = tx_input(&spell.ins);
     let output = tx_output(&spell.outs);
 
@@ -305,5 +310,5 @@ pub fn from_spell(spell: &Spell) -> Transaction {
         input,
         output,
     };
-    tx
+    BitcoinTx(tx)
 }

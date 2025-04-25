@@ -41,7 +41,7 @@ pub fn add_spell(
     funding_output_value: Amount,
     change_pubkey: ScriptBuf,
     fee_rate: FeeRate,
-    prev_txs: &BTreeMap<Txid, Transaction>,
+    prev_txs: &BTreeMap<TxId, Tx>,
     charms_fee_pubkey: Option<ScriptBuf>,
     charms_fee: Amount,
 ) -> [Transaction; 2] {
@@ -110,7 +110,7 @@ fn compute_change_amount(
     fee_rate: FeeRate,
     script_len: usize,
     tx: &Transaction,
-    prev_txs: &BTreeMap<Txid, Transaction>,
+    prev_txs: &BTreeMap<TxId, Tx>,
     commit_txout_value: Amount,
 ) -> Amount {
     let script_input_weight = Weight::from_wu(script_len as u64 + 268);
@@ -228,7 +228,7 @@ fn append_witness_data(
 }
 
 #[tracing::instrument(level = "debug", skip_all)]
-pub fn norm_spell(tx: &impl EnchantedTx) -> Option<NormalizedSpell> {
+pub fn norm_spell(tx: &Tx) -> Option<NormalizedSpell> {
     charms_client::tx::extract_and_verify_spell(SPELL_VK, tx)
         .map_err(|e| {
             tracing::debug!("spell verification failed: {:?}", e);
@@ -238,25 +238,31 @@ pub fn norm_spell(tx: &impl EnchantedTx) -> Option<NormalizedSpell> {
 }
 
 #[tracing::instrument(level = "debug", skip_all)]
-pub fn spell(tx: &impl EnchantedTx) -> Option<Spell> {
+pub fn spell(tx: &Tx) -> Option<Spell> {
     match norm_spell(tx) {
         Some(norm_spell) => Some(Spell::denormalized(&norm_spell)),
         None => None,
     }
 }
 
-pub fn txs_by_txid(prev_txs: Vec<Tx>) -> BTreeMap<TxId, Tx> {
+pub fn txs_by_txid(prev_txs: &[Tx]) -> BTreeMap<TxId, Tx> {
     prev_txs
-        .into_iter()
-        .map(|prev_tx| (prev_tx.tx_id(), prev_tx))
+        .iter()
+        .map(|prev_tx| (prev_tx.tx_id(), prev_tx.clone()))
         .collect::<BTreeMap<_, _>>()
 }
 
-pub fn tx_total_amount_in(prev_txs: &BTreeMap<Txid, Transaction>, tx: &Transaction) -> Amount {
+pub fn tx_total_amount_in(prev_txs: &BTreeMap<TxId, Tx>, tx: &Transaction) -> Amount {
     tx.input
         .iter()
         .map(|tx_in| (tx_in.previous_output.txid, tx_in.previous_output.vout))
-        .map(|(tx_id, i)| prev_txs[&tx_id].output[i as usize].value)
+        .map(|(tx_id, i)| {
+            let txid = TxId(tx_id.to_byte_array());
+            let Tx::Bitcoin(tx) = prev_txs[&txid].clone() else {
+                unreachable!()
+            };
+            tx.0.output[i as usize].value
+        })
         .sum::<Amount>()
 }
 

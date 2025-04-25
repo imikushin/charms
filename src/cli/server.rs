@@ -11,7 +11,7 @@ use axum::{extract::Path, routing::put};
 use axum::{
     extract::State,
     http::StatusCode,
-    routing::{get, post},
+    routing::{get /* , post */},
     Json, Router,
 };
 #[cfg(not(feature = "prover"))]
@@ -19,7 +19,10 @@ use bitcoin::consensus::encode::deserialize_hex;
 use bitcoin::consensus::encode::serialize_hex;
 #[cfg(not(feature = "prover"))]
 use bitcoincore_rpc::{jsonrpc::Error::Rpc, Auth, Client, RpcApi};
-use charms_client::{bitcoin_tx::BitcoinTx, tx::EnchantedTx};
+#[cfg(not(feature = "prover"))]
+use charms_client::bitcoin_tx::BitcoinTx;
+#[cfg(not(feature = "prover"))]
+use charms_client::tx::Tx;
 use serde::{Deserialize, Serialize};
 #[cfg(not(feature = "prover"))]
 use std::str::FromStr;
@@ -80,12 +83,12 @@ impl Server {
         let app = Router::new();
         #[cfg(not(feature = "prover"))]
         let app = app
-            .route("/spells/{txid}", get(show_spell_by_txid))
-            .with_state(self.rpc.clone())
+            // .route("/spells/{txid}", get(show_spell_by_txid))
+            // .with_state(self.rpc.clone())
             .route("/spells/{txid}", put(show_spell_for_tx_hex));
         let app = app
-            .route("/spells/prove", post(prove_spell))
-            .with_state(self.prover.clone())
+            // .route("/spells/prove", post(prove_spell))
+            // .with_state(self.prover.clone())
             .route("/ready", get(|| async { "OK" }))
             .layer(cors_layer());
 
@@ -100,14 +103,15 @@ impl Server {
 }
 
 // Handlers
-#[cfg(not(feature = "prover"))]
-#[tracing::instrument(level = "debug", skip_all)]
-async fn show_spell_by_txid(
-    State(rpc): State<Arc<Client>>,
-    Path(txid): Path<String>,
-) -> Result<Json<Spell>, StatusCode> {
-    get_spell(rpc, &txid).map(Json)
-}
+
+// #[cfg(not(feature = "prover"))]
+// #[tracing::instrument(level = "debug", skip_all)]
+// async fn show_spell_by_txid(
+//     State(rpc): State<Arc<Client>>,
+//     Path(txid): Path<String>,
+// ) -> Result<Json<Spell>, StatusCode> {
+//     get_spell(rpc, &txid).map(Json)
+// }
 
 #[cfg(not(feature = "prover"))]
 #[tracing::instrument(level = "debug", skip_all)]
@@ -142,23 +146,23 @@ fn bitcoind_client(rpc_url: String, rpc_user: String, rpc_password: String) -> C
     .expect("Should create RPC client")
 }
 
-#[cfg(not(feature = "prover"))]
-fn get_spell(rpc: Arc<Client>, txid: &str) -> Result<Spell, StatusCode> {
-    let txid = bitcoin::Txid::from_str(txid).map_err(|_| StatusCode::BAD_REQUEST)?;
-
-    match rpc.get_raw_transaction(&txid, None) {
-        Ok(tx) => extract_spell(&BitcoinTx(tx)),
-        Err(e) => match e {
-            bitcoincore_rpc::Error::JsonRpc(Rpc(rpc_error)) if rpc_error.code == -5 => {
-                Err(StatusCode::NOT_FOUND)
-            }
-            _ => {
-                tracing::warn!("Error: {:?}", e);
-                Err(StatusCode::INTERNAL_SERVER_ERROR)
-            }
-        },
-    }
-}
+// #[cfg(not(feature = "prover"))]
+// fn get_spell(rpc: Arc<Client>, txid: &str) -> Result<Spell, StatusCode> {
+//     let txid = bitcoin::Txid::from_str(txid).map_err(|_| StatusCode::BAD_REQUEST)?;
+//
+//     match rpc.get_raw_transaction(&txid, None) {
+//         Ok(tx) => extract_spell(&Tx::Bitcoin(BitcoinTx(tx))),
+//         Err(e) => match e {
+//             bitcoincore_rpc::Error::JsonRpc(Rpc(rpc_error)) if rpc_error.code == -5 => {
+//                 Err(StatusCode::NOT_FOUND)
+//             }
+//             _ => {
+//                 tracing::warn!("Error: {:?}", e);
+//                 Err(StatusCode::INTERNAL_SERVER_ERROR)
+//             }
+//         },
+//     }
+// }
 
 #[cfg(not(feature = "prover"))]
 fn show_spell(txid: &str, request: &ShowSpellRequest) -> Result<Spell, StatusCode> {
@@ -168,11 +172,11 @@ fn show_spell(txid: &str, request: &ShowSpellRequest) -> Result<Spell, StatusCod
     if tx.compute_txid() != txid {
         return Err(StatusCode::BAD_REQUEST);
     }
-    extract_spell(&BitcoinTx(tx))
+    extract_spell(&Tx::Bitcoin(BitcoinTx(tx)))
 }
 
 #[cfg(not(feature = "prover"))]
-fn extract_spell(tx: &impl EnchantedTx) -> Result<Spell, StatusCode> {
+fn extract_spell(tx: &Tx) -> Result<Spell, StatusCode> {
     match norm_spell(tx) {
         None => Err(StatusCode::NO_CONTENT),
         Some(spell) => Ok(Spell::denormalized(&spell)),

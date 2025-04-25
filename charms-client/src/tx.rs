@@ -13,6 +13,7 @@ pub trait EnchantedTx {
     fn extract_and_verify_spell(&self, spell_vk: &str) -> anyhow::Result<NormalizedSpell>;
     fn tx_outs_len(&self) -> usize;
     fn tx_id(&self) -> TxId;
+    fn hex(&self) -> String;
 }
 
 #[enum_dispatch(EnchantedTx)]
@@ -22,12 +23,28 @@ pub enum Tx {
     Cardano(CardanoTx),
 }
 
+impl Tx {
+    pub fn new(tx: impl Into<Tx>) -> Self {
+        tx.into()
+    }
+
+    pub fn from_hex(hex: &str) -> anyhow::Result<Self> {
+        if let Ok(b_tx @ BitcoinTx(_)) = BitcoinTx::from_hex(hex) {
+            Ok(Self::Bitcoin(b_tx))
+        } else if let Ok(c_tx @ CardanoTx(_)) = CardanoTx::from_hex(hex) {
+            Ok(Self::Cardano(c_tx))
+        } else {
+            bail!("invalid hex")
+        }
+    }
+}
+
 /// Extract a [`NormalizedSpell`] from a transaction and verify it.
 /// Incorrect spells are rejected.
 #[tracing::instrument(level = "debug", skip_all)]
 pub fn extract_and_verify_spell(
     spell_vk: &str,
-    enchanted_tx: &impl EnchantedTx,
+    enchanted_tx: &Tx,
 ) -> anyhow::Result<NormalizedSpell> {
     enchanted_tx.extract_and_verify_spell(spell_vk)
 }

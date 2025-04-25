@@ -100,7 +100,7 @@ impl Check for SpellCli {
 
         let tx = tx::from_spell(&spell);
 
-        let prev_txs = cli::tx::get_prev_txs(&tx)?;
+        let prev_txs = cli::tx::get_prev_txs(&tx.0)?;
 
         let prev_spells = charms_client::prev_spells(&prev_txs, &SPELL_VK);
 
@@ -186,9 +186,9 @@ impl Cast for SpellCli {
 }
 
 #[tracing::instrument(level = "debug", skip(spell))]
-fn gather_prev_txs(spell: &Spell) -> Result<Vec<Transaction>, Error> {
+fn gather_prev_txs(spell: &Spell) -> Result<Vec<Tx>, Error> {
     let tx = tx::from_spell(&spell);
-    let prev_txs = cli::tx::get_prev_txs(&tx)?;
+    let prev_txs = cli::tx::get_prev_txs(&tx.0)?;
     Ok(prev_txs)
 }
 

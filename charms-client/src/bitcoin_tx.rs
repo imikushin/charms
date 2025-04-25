@@ -1,6 +1,7 @@
 use crate::{tx::EnchantedTx, NormalizedSpell, Proof};
 use anyhow::{anyhow, bail, ensure};
 use bitcoin::{
+    consensus::encode::{deserialize_hex, serialize_hex},
     hashes::Hash,
     opcodes::all::{OP_ENDIF, OP_IF},
     script::{Instruction, PushBytes},
@@ -12,6 +13,13 @@ use sp1_verifier::Groth16Verifier;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BitcoinTx(pub bitcoin::Transaction);
+
+impl BitcoinTx {
+    pub fn from_hex(hex: &str) -> anyhow::Result<Self> {
+        let tx = deserialize_hex(hex)?;
+        Ok(Self(tx))
+    }
+}
 
 impl EnchantedTx for BitcoinTx {
     fn extract_and_verify_spell(&self, spell_vk: &str) -> anyhow::Result<NormalizedSpell> {
@@ -53,6 +61,10 @@ impl EnchantedTx for BitcoinTx {
 
     fn tx_id(&self) -> TxId {
         TxId(self.0.compute_txid().to_byte_array())
+    }
+
+    fn hex(&self) -> String {
+        serialize_hex(&self.0)
     }
 }
 

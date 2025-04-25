@@ -19,7 +19,7 @@ pub(crate) fn parse_outpoint(s: &str) -> Result<OutPoint> {
 pub fn tx_show_spell(tx: String, json: bool) -> Result<()> {
     let tx = deserialize_hex::<Transaction>(&tx)?;
 
-    match tx::spell(&BitcoinTx(tx)) {
+    match tx::spell(&Tx::Bitcoin(BitcoinTx(tx))) {
         Some(spell) => cli::print_output(&spell, json)?,
         None => eprintln!("No spell found in the transaction"),
     }

@@ -8,18 +8,14 @@ use crate::{
     SPELL_CHECKER_BINARY, SPELL_VK,
 };
 use anyhow::{anyhow, ensure, Error};
+#[cfg(not(feature = "prover"))]
+use bitcoin::consensus::encode::deserialize_hex;
 #[cfg(feature = "prover")]
 use bitcoin::FeeRate;
-use bitcoin::{
-    address::NetworkUnchecked,
-    consensus::encode::{deserialize_hex, serialize_hex},
-    hashes::Hash,
-    Address, Amount, OutPoint,
-};
-use charms_client::{
-    bitcoin_tx::BitcoinTx,
-    tx::{EnchantedTx, Tx},
-};
+use bitcoin::{address::NetworkUnchecked, hashes::Hash, Address, Amount, OutPoint};
+#[cfg(not(feature = "prover"))]
+use charms_client::bitcoin_tx::BitcoinTx;
+use charms_client::tx::{EnchantedTx, Tx};
 pub use charms_client::{
     to_tx, NormalizedCharms, NormalizedSpell, NormalizedTransaction, Proof, SpellProverInput,
     CURRENT_VERSION,
@@ -317,7 +313,7 @@ pub trait Prove {
         norm_spell: NormalizedSpell,
         app_binaries: &BTreeMap<B32, Vec<u8>>,
         app_private_inputs: BTreeMap<App, Data>,
-        prev_txs: Vec<Box<dyn EnchantedTx>>,
+        prev_txs: Vec<Tx>,
         expected_cycles: Option<Vec<u64>>,
     ) -> anyhow::Result<(NormalizedSpell, Proof, u64)>;
 }
@@ -436,15 +432,10 @@ pub struct CharmsFee {
     pub fee_base: u64,
 }
 
-serde_with::serde_conv!(
-    TxHex,
-    bitcoin::Transaction,
-    |tx: &bitcoin::Transaction| serialize_hex(tx),
-    |s: &str| deserialize_hex(s).map_err(|e| anyhow!(e))
-);
+serde_with::serde_conv!(TxHex, Tx, |tx: &Tx| tx.hex(), |s: &str| Tx::from_hex(s));
 
 #[serde_as]
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProveRequest {
     pub spell: Spell,
     #[serde_as(as = "IfIsHumanReadable<BTreeMap<_, Base64>>")]
@@ -482,13 +473,15 @@ impl ProveSpellTx for Prover {
             charms_fee,
         }: ProveRequest,
     ) -> anyhow::Result<[bitcoin::Transaction; 2]> {
-        let prev_txs_by_id = txs_by_txid(prev_txs.clone());
+        let prev_txs_by_id = txs_by_txid(&prev_txs);
 
         let tx = tx::from_spell(&spell);
         ensure!(tx
+            .0
             .input
             .iter()
-            .all(|input| prev_txs_by_id.contains_key(&input.previous_output.txid)));
+            .all(|input| prev_txs_by_id
+                .contains_key(&TxId(input.previous_output.txid.to_byte_array()))));
 
         let (norm_spell, app_private_inputs) = spell.normalized()?;
 
@@ -503,11 +496,6 @@ impl ProveSpellTx for Prover {
             None,
         )?;
         let total_app_cycles: u64 = expected_cycles.iter().sum();
-
-        let prev_txs = prev_txs
-            .into_iter()
-            .map(|tx| Tx::Bitcoin(BitcoinTx(tx)))
-            .collect();
 
         let (norm_spell, proof, spell_cycles) = self.prove(
             norm_spell,
@@ -541,7 +529,7 @@ impl ProveSpellTx for Prover {
 
         // Call the add_spell function
         let transactions = add_spell(
-            tx,
+            tx.0,
             &spell_data,
             funding_utxo,
             Amount::from_sat(funding_utxo_value),
@@ -561,7 +549,7 @@ impl ProveSpellTx for Prover {
         prove_request: ProveRequest,
     ) -> anyhow::Result<[bitcoin::Transaction; 2]> {
         let prove_request = self.add_fee(prove_request);
-        let prev_txs_by_id = txs_by_txid(prove_request.prev_txs.clone());
+        let prev_txs_by_id = txs_by_txid(&prove_request.prev_txs);
 
         let tx = tx::from_spell(&prove_request.spell);
         // let encoded_tx = EncodedTx::Bitcoin(BitcoinTx(tx.clone()));
@@ -595,12 +583,17 @@ impl ProveSpellTx for Prover {
                 .map(|i| {
                     prev_txs_by_id
                         .get(&TxId(i.previous_output.txid.to_byte_array()))
-                        .map(|prev_tx| prev_tx.output[i.previous_output.vout as usize].value)
+                        .map(|prev_tx| {
+                            let Tx::Bitcoin(BitcoinTx(prev_tx)) = prev_tx else {
+                                unreachable!()
+                            };
+                            prev_tx.output[i.previous_output.vout as usize].value
+                        })
                         .unwrap_or_default()
                 })
                 .sum::<Amount>()
                 .to_sat();
-        let total_sats_out = tx.output.iter().map(|o| o.value).sum::<Amount>().to_sat();
+        let total_sats_out = tx.0.output.iter().map(|o| o.value).sum::<Amount>().to_sat();
 
         let funding_utxo_sats = prove_request.funding_utxo_value;
 

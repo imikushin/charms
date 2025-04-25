@@ -8,6 +8,12 @@ use sp1_verifier::Groth16Verifier;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CardanoTx(pub Transaction);
 
+impl CardanoTx {
+    pub fn from_hex(hex: &str) -> anyhow::Result<Self> {
+        Ok(Self(Transaction::from_hex(hex)?))
+    }
+}
+
 impl EnchantedTx for CardanoTx {
     fn extract_and_verify_spell(&self, spell_vk: &str) -> anyhow::Result<NormalizedSpell> {
         let tx = &self.0;
@@ -63,6 +69,10 @@ impl EnchantedTx for CardanoTx {
     fn tx_id(&self) -> TxId {
         let transaction_hash = Blake2b256::new(&self.0.body().to_bytes());
         TxId(transaction_hash.into())
+    }
+
+    fn hex(&self) -> String {
+        self.0.to_hex()
     }
 }
 

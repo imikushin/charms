@@ -2,10 +2,7 @@ pub mod app;
 pub mod bin;
 
 use crate::app::AppContractVK;
-use charms_client::{
-    tx::{EnchantedTx, Tx},
-    NormalizedSpell,
-};
+use charms_client::{tx::Tx, NormalizedSpell};
 use charms_data::App;
 
 /// Check if the spell is correct.

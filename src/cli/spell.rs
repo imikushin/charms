@@ -1,9 +1,13 @@
 use crate::{
     app, cli,
-    cli::{wallet, wallet::MIN_SATS, SpellCastParams, SpellCheckParams, SpellProveParams},
+    cli::{
+        wallet, wallet::MIN_SATS, SpellCastParams, SpellCheckParams, SpellProveParams, BITCOIN,
+        CARDANO,
+    },
     spell,
     spell::{ProveRequest, ProveSpellTx, Spell},
-    tx, SPELL_VK,
+    tx::{bitcoin_tx, cardano_tx},
+    SPELL_VK,
 };
 use anyhow::{ensure, Error, Result};
 use bitcoin::{
@@ -92,6 +96,7 @@ impl Check for SpellCli {
             spell,
             app_bins,
             prev_txs,
+            chain,
         }: SpellCheckParams,
     ) -> Result<()> {
         let mut spell: Spell = serde_yaml::from_slice(&std::fs::read(spell)?)?;
@@ -105,14 +110,23 @@ impl Check for SpellCli {
             "all spell inputs must have utxo_id"
         );
 
-        let tx = tx::from_spell(&spell);
+        let chain = chain.as_str();
+
+        let tx = match chain {
+            BITCOIN => Tx::Bitcoin(bitcoin_tx::from_spell(&spell)?),
+            CARDANO => Tx::Cardano(cardano_tx::from_spell(&spell)?),
+            _ => unreachable!(),
+        };
 
         let prev_txs = match prev_txs {
             Some(prev_txs) => prev_txs
                 .iter()
                 .map(|tx_hex| Tx::from_hex(tx_hex))
                 .collect::<Result<_>>()?,
-            None => cli::tx::get_prev_txs(&tx.0)?,
+            None => match tx {
+                Tx::Bitcoin(tx) => cli::tx::get_prev_txs(&tx.0)?,
+                Tx::Cardano(_) => todo!(),
+            },
         };
 
         let prev_spells = charms_client::prev_spells(&prev_txs, &SPELL_VK);
@@ -120,7 +134,7 @@ impl Check for SpellCli {
         let (norm_spell, app_private_inputs) = spell.normalized()?;
 
         ensure!(
-            charms_client::well_formed(&norm_spell, &prev_spells),
+            charms_client::well_formed(dbg!(&norm_spell), dbg!(&prev_spells)),
             "spell is not well-formed"
         );
 
@@ -200,7 +214,7 @@ impl Cast for SpellCli {
 
 #[tracing::instrument(level = "debug", skip(spell))]
 fn gather_prev_txs(spell: &Spell) -> Result<Vec<Tx>, Error> {
-    let tx = tx::from_spell(&spell);
+    let tx = bitcoin_tx::from_spell(&spell)?;
     let prev_txs = cli::tx::get_prev_txs(&tx.0)?;
     Ok(prev_txs)
 }

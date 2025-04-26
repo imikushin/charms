@@ -1,7 +1,6 @@
 use crate::{
     script::{control_block, data_script, taproot_spend_info},
     spell::{Input, Output, Spell},
-    SPELL_VK,
 };
 use bitcoin::{
     self,
@@ -16,11 +15,7 @@ use bitcoin::{
     Address, Amount, FeeRate, OutPoint, ScriptBuf, TapLeafHash, TapSighashType, Transaction, TxIn,
     TxOut, Txid, Weight, Witness, XOnlyPublicKey,
 };
-use charms_client::{
-    bitcoin_tx::BitcoinTx,
-    tx::{EnchantedTx, Tx},
-    NormalizedSpell,
-};
+use charms_client::{bitcoin_tx::BitcoinTx, tx::Tx};
 use charms_data::TxId;
 use std::{collections::BTreeMap, str::FromStr};
 
@@ -227,31 +222,6 @@ fn append_witness_data(
     witness.push(control_block(public_key, script).serialize());
 }
 
-#[tracing::instrument(level = "debug", skip_all)]
-pub fn norm_spell(tx: &Tx) -> Option<NormalizedSpell> {
-    charms_client::tx::extract_and_verify_spell(SPELL_VK, tx)
-        .map_err(|e| {
-            tracing::debug!("spell verification failed: {:?}", e);
-            e
-        })
-        .ok()
-}
-
-#[tracing::instrument(level = "debug", skip_all)]
-pub fn spell(tx: &Tx) -> Option<Spell> {
-    match norm_spell(tx) {
-        Some(norm_spell) => Some(Spell::denormalized(&norm_spell)),
-        None => None,
-    }
-}
-
-pub fn txs_by_txid(prev_txs: &[Tx]) -> BTreeMap<TxId, Tx> {
-    prev_txs
-        .iter()
-        .map(|prev_tx| (prev_tx.tx_id(), prev_tx.clone()))
-        .collect::<BTreeMap<_, _>>()
-}
-
 pub fn tx_total_amount_in(prev_txs: &BTreeMap<TxId, Tx>, tx: &Transaction) -> Amount {
     tx.input
         .iter()
@@ -270,8 +240,9 @@ pub fn tx_total_amount_out(tx: &Transaction) -> Amount {
     tx.output.iter().map(|tx_out| tx_out.value).sum::<Amount>()
 }
 
-pub fn tx_output(outs: &[Output]) -> Vec<TxOut> {
-    outs.iter()
+pub fn tx_output(outs: &[Output]) -> anyhow::Result<Vec<TxOut>> {
+    let tx_outputs = outs
+        .iter()
         .map(|u| {
             let value = Amount::from_sat(u.amount.unwrap_or(1000)); // TODO make a constant
             let address = u
@@ -280,17 +251,17 @@ pub fn tx_output(outs: &[Output]) -> Vec<TxOut> {
                 .expect("address should be provided")
                 .clone();
             let script_pubkey = ScriptBuf::from(
-                Address::from_str(&address)
-                    .unwrap()     // TODO handle error
+                Address::from_str(&address)?
                     .assume_checked()
                     .script_pubkey(),
             );
-            TxOut {
+            Ok(TxOut {
                 value,
                 script_pubkey,
-            }
+            })
         })
-        .collect()
+        .collect::<anyhow::Result<_>>()?;
+    Ok(tx_outputs)
 }
 
 pub fn tx_input(ins: &[Input]) -> Vec<TxIn> {
@@ -310,9 +281,9 @@ pub fn tx_input(ins: &[Input]) -> Vec<TxIn> {
         .collect()
 }
 
-pub fn from_spell(spell: &Spell) -> BitcoinTx {
+pub fn from_spell(spell: &Spell) -> anyhow::Result<BitcoinTx> {
     let input = tx_input(&spell.ins);
-    let output = tx_output(&spell.outs);
+    let output = tx_output(&spell.outs)?;
 
     let tx = Transaction {
         version: Version::TWO,
@@ -320,5 +291,5 @@ pub fn from_spell(spell: &Spell) -> BitcoinTx {
         input,
         output,
     };
-    BitcoinTx(tx)
+    Ok(BitcoinTx(tx))
 }

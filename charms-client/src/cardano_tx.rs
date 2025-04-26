@@ -65,10 +65,11 @@ impl EnchantedTx for CardanoTx {
         self.0.body().outputs().len()
     }
 
-    // TODO make sure this is correct
     fn tx_id(&self) -> TxId {
         let transaction_hash = Blake2b256::new(&self.0.body().to_bytes());
-        TxId(transaction_hash.into())
+        let mut txid: [u8; 32] = transaction_hash.into();
+        txid.reverse(); // Cardano seems to store IDs reverted compared to Bitcoin txid format
+        TxId(txid)
     }
 
     fn hex(&self) -> String {

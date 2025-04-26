@@ -1,10 +1,12 @@
+#[cfg(not(feature = "prover"))]
+use crate::spell::Spell;
+#[cfg(not(feature = "prover"))]
+use crate::tx::norm_spell;
 use crate::{
     cli::ServerConfig,
     spell::{ProveRequest, ProveSpellTx, Prover},
     utils::AsyncShared,
 };
-#[cfg(not(feature = "prover"))]
-use crate::{spell::Spell, tx::norm_spell};
 use anyhow::Result;
 #[cfg(not(feature = "prover"))]
 use axum::{extract::Path, routing::put};

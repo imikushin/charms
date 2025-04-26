@@ -27,6 +27,9 @@ use spell::Cast;
 use std::{io, net::IpAddr, path::PathBuf, str::FromStr, sync::Arc};
 use utils::AsyncShared;
 
+pub const BITCOIN: &str = "bitcoin";
+pub const CARDANO: &str = "cardano";
+
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 pub struct Cli {
@@ -159,6 +162,10 @@ pub struct SpellCheckParams {
     /// If the spell has any reference UTXOs, the transactions creating them must also be included.
     #[arg(long, value_delimiter = ',')]
     prev_txs: Option<Vec<String>>,
+
+    /// Target chain, defaults to `bitcoin`. Can be `bitcoin` or `cardano`.
+    #[arg(long, default_value = "bitcoin")]
+    chain: String,
 }
 
 #[derive(Subcommand)]

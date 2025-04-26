@@ -1,8 +1,8 @@
 #[cfg(feature = "prover")]
-use crate::tx::add_spell;
+use crate::tx::bitcoin_tx::add_spell;
 use crate::{
-    app, tx,
-    tx::txs_by_txid,
+    app,
+    tx::{bitcoin_tx, txs_by_txid},
     utils,
     utils::{BoxedSP1Prover, Shared},
     SPELL_CHECKER_BINARY, SPELL_VK,
@@ -475,7 +475,7 @@ impl ProveSpellTx for Prover {
     ) -> anyhow::Result<[bitcoin::Transaction; 2]> {
         let prev_txs_by_id = txs_by_txid(&prev_txs);
 
-        let tx = tx::from_spell(&spell);
+        let tx = bitcoin_tx::from_spell(&spell)?;
         ensure!(tx
             .0
             .input
@@ -551,7 +551,7 @@ impl ProveSpellTx for Prover {
         let prove_request = self.add_fee(prove_request);
         let prev_txs_by_id = txs_by_txid(&prove_request.prev_txs);
 
-        let tx = tx::from_spell(&prove_request.spell);
+        let tx = bitcoin_tx::from_spell(&prove_request.spell)?;
         // let encoded_tx = EncodedTx::Bitcoin(BitcoinTx(tx.clone()));
         ensure!(tx
             .0

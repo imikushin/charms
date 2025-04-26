@@ -86,10 +86,17 @@ impl Prove for SpellCli {
 
 impl Check for SpellCli {
     #[tracing::instrument(level = "debug", skip(self, spell, app_bins))]
-    fn check(&self, SpellCheckParams { spell, app_bins }: SpellCheckParams) -> Result<()> {
+    fn check(
+        &self,
+        SpellCheckParams {
+            spell,
+            app_bins,
+            prev_txs,
+        }: SpellCheckParams,
+    ) -> Result<()> {
         let mut spell: Spell = serde_yaml::from_slice(&std::fs::read(spell)?)?;
         for u in spell.outs.iter_mut() {
-            u.sats.get_or_insert(crate::cli::wallet::MIN_SATS);
+            u.amount.get_or_insert(crate::cli::wallet::MIN_SATS);
         }
 
         // make sure spell inputs all have utxo_id
@@ -100,7 +107,13 @@ impl Check for SpellCli {
 
         let tx = tx::from_spell(&spell);
 
-        let prev_txs = cli::tx::get_prev_txs(&tx.0)?;
+        let prev_txs = match prev_txs {
+            Some(prev_txs) => prev_txs
+                .iter()
+                .map(|tx_hex| Tx::from_hex(tx_hex))
+                .collect::<Result<_>>()?,
+            None => cli::tx::get_prev_txs(&tx.0)?,
+        };
 
         let prev_spells = charms_client::prev_spells(&prev_txs, &SPELL_VK);
 
@@ -148,7 +161,7 @@ impl Cast for SpellCli {
         spell_pre_checks(&spell)?;
 
         for u in spell.outs.iter_mut() {
-            u.sats.get_or_insert(MIN_SATS);
+            u.amount.get_or_insert(MIN_SATS);
         }
 
         let prev_txs = gather_prev_txs(&spell)?;

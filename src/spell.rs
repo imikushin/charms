@@ -48,9 +48,9 @@ pub struct Input {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Output {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub address: Option<Address<NetworkUnchecked>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub sats: Option<u64>,
+    pub address: Option<String>,
+    #[serde(alias = "sats", skip_serializing_if = "Option::is_none")]
+    pub amount: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub charms: Option<KeyedCharms>,
 }
@@ -257,7 +257,7 @@ impl Spell {
             .iter()
             .map(|n_charms| Output {
                 address: None,
-                sats: None,
+                amount: None,
                 charms: match n_charms
                     .iter()
                     .map(|(i, data)| {

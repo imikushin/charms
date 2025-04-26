@@ -13,8 +13,8 @@ use bitcoin::{
     taproot,
     taproot::LeafVersion,
     transaction::Version,
-    Amount, FeeRate, OutPoint, ScriptBuf, TapLeafHash, TapSighashType, Transaction, TxIn, TxOut,
-    Txid, Weight, Witness, XOnlyPublicKey,
+    Address, Amount, FeeRate, OutPoint, ScriptBuf, TapLeafHash, TapSighashType, Transaction, TxIn,
+    TxOut, Txid, Weight, Witness, XOnlyPublicKey,
 };
 use charms_client::{
     bitcoin_tx::BitcoinTx,
@@ -22,7 +22,7 @@ use charms_client::{
     NormalizedSpell,
 };
 use charms_data::TxId;
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, str::FromStr};
 
 /// `add_spell` adds `spell` to `tx`:
 /// 1. it builds `commit_tx` transaction which creates a *committed spell* Tapscript output
@@ -273,14 +273,18 @@ pub fn tx_total_amount_out(tx: &Transaction) -> Amount {
 pub fn tx_output(outs: &[Output]) -> Vec<TxOut> {
     outs.iter()
         .map(|u| {
-            let value = Amount::from_sat(u.sats.unwrap_or(1000)); // TODO make a constant
+            let value = Amount::from_sat(u.amount.unwrap_or(1000)); // TODO make a constant
             let address = u
                 .address
                 .as_ref()
                 .expect("address should be provided")
-                .clone()
-                .assume_checked();
-            let script_pubkey = ScriptBuf::from(address.script_pubkey());
+                .clone();
+            let script_pubkey = ScriptBuf::from(
+                Address::from_str(&address)
+                    .unwrap()     // TODO handle error
+                    .assume_checked()
+                    .script_pubkey(),
+            );
             TxOut {
                 value,
                 script_pubkey,

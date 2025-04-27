@@ -13,6 +13,8 @@ pub const V0_SPELL_VK: &str = "0x00e9398ac819e6dd281f81db3ada3fe5159c3cc40222b5d
 pub const V1_SPELL_VK: &str = "0x009f38f590ebca4c08c1e97b4064f39e4cd336eea4069669c5f5170a38a1ff97";
 /// Verification key for version `2` of the protocol implemented by `charms-spell-checker` binary.
 pub const V2_SPELL_VK: &str = "0x00bd312b6026dbe4a2c16da1e8118d4fea31587a4b572b63155252d2daf69280";
+/// Verification key for version `3` of the protocol implemented by `charms-spell-checker` binary.
+pub const V3_SPELL_VK: &str = "0x00978d5d2a9345cd7b0f3c890239b9ca7833072d260fb1bd1750457f6e6f9c2f";
 
 /// Version `0` of the protocol.
 pub const V0: u32 = 0u32;
@@ -24,9 +26,9 @@ pub const V2: u32 = 2u32;
 pub const V3: u32 = 3u32;
 
 /// Verification key for the `charms-spell-checker` binary.
-pub const SPELL_VK: &str = V2_SPELL_VK;
+pub const SPELL_VK: &str = V3_SPELL_VK;
 /// Current version of the protocol.
-pub const CURRENT_VERSION: u32 = V2;
+pub const CURRENT_VERSION: u32 = V3;
 
 /// Maps the index of the charm's app (in [`NormalizedSpell`].`app_public_inputs`) to the charm's
 /// data.

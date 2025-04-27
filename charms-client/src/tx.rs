@@ -1,6 +1,6 @@
 use crate::{
     bitcoin_tx::BitcoinTx, cardano_tx::CardanoTx, NormalizedSpell, CURRENT_VERSION, V0,
-    V0_SPELL_VK, V1, V1_SPELL_VK,
+    V0_SPELL_VK, V1, V1_SPELL_VK, V2, V2_SPELL_VK,
 };
 use anyhow::bail;
 use charms_data::{util, TxId};
@@ -52,13 +52,16 @@ pub fn extract_and_verify_spell(
 pub fn vks(spell_version: u32, spell_vk: &str) -> anyhow::Result<(&str, &[u8])> {
     match spell_version {
         CURRENT_VERSION => Ok((spell_vk, *sp1_verifier::GROTH16_VK_BYTES)),
-        V1 => Ok((V1_SPELL_VK, *sp1_verifier::GROTH16_VK_BYTES)),
+        V2 => Ok((V2_SPELL_VK, V2_GROTH16_VK_BYTES)),
+        V1 => Ok((V1_SPELL_VK, V1_GROTH16_VK_BYTES)),
         V0 => Ok((V0_SPELL_VK, V0_GROTH16_VK_BYTES)),
         _ => bail!("unsupported spell version: {}", spell_version),
     }
 }
 
 pub const V0_GROTH16_VK_BYTES: &'static [u8] = include_bytes!("../vk/v0/groth16_vk.bin");
+pub const V1_GROTH16_VK_BYTES: &'static [u8] = include_bytes!("../vk/v1/groth16_vk.bin");
+pub const V2_GROTH16_VK_BYTES: &'static [u8] = V1_GROTH16_VK_BYTES;
 
 pub fn to_sp1_pv<T: Serialize>(spell_version: u32, t: &T) -> SP1PublicValues {
     let mut pv = SP1PublicValues::new();
@@ -67,7 +70,7 @@ pub fn to_sp1_pv<T: Serialize>(spell_version: u32, t: &T) -> SP1PublicValues {
             // we commit to CBOR-encoded tuple `(spell_vk, n_spell)`
             pv.write_slice(util::write(t).unwrap().as_slice());
         }
-        V1 => {
+        V2 | V1 => {
             // we commit to CBOR-encoded tuple `(spell_vk, n_spell)`
             pv.write_slice(util::write(t).unwrap().as_slice());
         }

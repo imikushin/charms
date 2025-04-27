@@ -130,7 +130,8 @@ pub struct SpellProveParams {
     /// transactions. The rest of the value will be returned to the `change-address`.
     #[arg(long, alias = "funding-utxo-id")]
     funding_utxo: String,
-    /// Value of the funding UTXO in sats.
+
+    /// Value of the funding UTXO in sats (for Bitcoin) or lovelace (for Cardano).
     #[arg(long)]
     funding_utxo_value: u64,
 

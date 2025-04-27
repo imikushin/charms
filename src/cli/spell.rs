@@ -7,14 +7,13 @@ use crate::{
     spell,
     spell::{ProveRequest, ProveSpellTx, Spell},
     tx::{bitcoin_tx, cardano_tx},
-    SPELL_VK,
 };
 use anyhow::{ensure, Error, Result};
 use bitcoin::{
     consensus::encode::{deserialize_hex, serialize_hex},
     Transaction,
 };
-use charms_client::{bitcoin_tx::BitcoinTx, cardano_tx::CardanoTx, tx::Tx};
+use charms_client::{bitcoin_tx::BitcoinTx, cardano_tx::CardanoTx, tx::Tx, SPELL_VK};
 use std::{future::Future, sync::Arc};
 
 pub trait Check {

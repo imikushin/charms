@@ -5,7 +5,7 @@ use crate::{
     tx::{bitcoin_tx, txs_by_txid},
     utils,
     utils::{BoxedSP1Prover, Shared},
-    SPELL_CHECKER_BINARY, SPELL_VK,
+    SPELL_CHECKER_BINARY,
 };
 use anyhow::{anyhow, ensure, Error};
 #[cfg(not(feature = "prover"))]
@@ -15,10 +15,13 @@ use bitcoin::FeeRate;
 use bitcoin::{address::NetworkUnchecked, hashes::Hash, Address, Amount, OutPoint};
 #[cfg(not(feature = "prover"))]
 use charms_client::bitcoin_tx::BitcoinTx;
-use charms_client::tx::{EnchantedTx, Tx};
 pub use charms_client::{
     to_tx, NormalizedCharms, NormalizedSpell, NormalizedTransaction, Proof, SpellProverInput,
     CURRENT_VERSION,
+};
+use charms_client::{
+    tx::{EnchantedTx, Tx},
+    SPELL_VK,
 };
 use charms_data::{util, App, Charms, Data, Transaction, TxId, UtxoId, B32};
 #[cfg(not(feature = "prover"))]

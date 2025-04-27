@@ -1,7 +1,7 @@
-use crate::{spell::Spell, SPELL_VK};
+use crate::spell::Spell;
 use charms_client::{
     tx::{EnchantedTx, Tx},
-    NormalizedSpell,
+    NormalizedSpell, SPELL_VK,
 };
 use charms_data::TxId;
 use std::collections::BTreeMap;

@@ -18,11 +18,11 @@ use axum::{
 };
 #[cfg(not(feature = "prover"))]
 use bitcoin::consensus::encode::deserialize_hex;
-use bitcoin::consensus::encode::serialize_hex;
 #[cfg(not(feature = "prover"))]
 use bitcoincore_rpc::{jsonrpc::Error::Rpc, Auth, Client, RpcApi};
 #[cfg(not(feature = "prover"))]
 use charms_client::bitcoin_tx::BitcoinTx;
+use charms_client::tx::EnchantedTx;
 #[cfg(not(feature = "prover"))]
 use charms_client::tx::Tx;
 use serde::{Deserialize, Serialize};
@@ -134,7 +134,7 @@ async fn prove_spell(
         .await
         .prove_spell_tx(payload)
         .await
-        .map(|txs| txs.iter().map(serialize_hex).collect::<Vec<_>>())
+        .map(|txs| txs.iter().map(|tx| tx.hex()).collect::<Vec<_>>())
         .map_err(|_| StatusCode::BAD_REQUEST)?;
     Ok(Json(result))
 }

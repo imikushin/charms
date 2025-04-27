@@ -11,7 +11,7 @@ use charms_data::{util, TxId, UtxoId};
 use serde::{Deserialize, Serialize};
 use sp1_verifier::Groth16Verifier;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct BitcoinTx(pub bitcoin::Transaction);
 
 impl BitcoinTx {

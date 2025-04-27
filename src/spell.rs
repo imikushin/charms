@@ -9,20 +9,13 @@ use crate::{
     SPELL_CHECKER_BINARY,
 };
 use anyhow::{anyhow, ensure, Error};
-#[cfg(not(feature = "prover"))]
-use bitcoin::consensus::encode::deserialize_hex;
 #[cfg(feature = "prover")]
 use bitcoin::FeeRate;
 use bitcoin::{address::NetworkUnchecked, hashes::Hash, Address, Amount, OutPoint};
-#[cfg(not(feature = "prover"))]
-use charms_client::bitcoin_tx::BitcoinTx;
+use charms_client::{bitcoin_tx::BitcoinTx, tx::Tx, SPELL_VK};
 pub use charms_client::{
     to_tx, NormalizedCharms, NormalizedSpell, NormalizedTransaction, Proof, SpellProverInput,
     CURRENT_VERSION,
-};
-use charms_client::{
-    tx::{EnchantedTx, Tx},
-    SPELL_VK,
 };
 use charms_data::{util, App, Charms, Data, Transaction, TxId, UtxoId, B32};
 #[cfg(not(feature = "prover"))]
@@ -427,7 +420,7 @@ pub trait ProveSpellTx {
     fn prove_spell_tx(
         &self,
         prove_request: ProveRequest,
-    ) -> impl std::future::Future<Output = anyhow::Result<Vec<bitcoin::Transaction>>>;
+    ) -> impl std::future::Future<Output = anyhow::Result<Vec<Tx>>>;
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -437,15 +430,12 @@ pub struct CharmsFee {
     pub fee_base: u64,
 }
 
-serde_with::serde_conv!(TxHex, Tx, |tx: &Tx| tx.hex(), |s: &str| Tx::from_hex(s));
-
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProveRequest {
     pub spell: Spell,
     #[serde_as(as = "IfIsHumanReadable<BTreeMap<_, Base64>>")]
     pub binaries: BTreeMap<B32, Vec<u8>>,
-    #[serde_as(as = "IfIsHumanReadable<Vec<TxHex>>")]
     pub prev_txs: Vec<Tx>,
     pub funding_utxo: OutPoint,
     pub funding_utxo_value: u64,
@@ -479,7 +469,7 @@ impl ProveSpellTx for Prover {
             charms_fee,
             chain,
         }: ProveRequest,
-    ) -> anyhow::Result<Vec<bitcoin::Transaction>> {
+    ) -> anyhow::Result<Vec<Tx>> {
         let prev_txs_by_id = txs_by_txid(&prev_txs);
 
         let all_inputs_produced_by_prev_txs = spell
@@ -553,7 +543,10 @@ impl ProveSpellTx for Prover {
                     charms_fee_pubkey,
                     charms_fee,
                 );
-                Ok(transactions)
+                Ok(transactions
+                    .into_iter()
+                    .map(|tx| Tx::Bitcoin(BitcoinTx(tx)))
+                    .collect())
             }
             CARDANO => {
                 todo!()
@@ -564,10 +557,7 @@ impl ProveSpellTx for Prover {
 
     #[cfg(not(feature = "prover"))]
     #[tracing::instrument(level = "info", skip_all)]
-    async fn prove_spell_tx(
-        &self,
-        prove_request: ProveRequest,
-    ) -> anyhow::Result<Vec<bitcoin::Transaction>> {
+    async fn prove_spell_tx(&self, prove_request: ProveRequest) -> anyhow::Result<Vec<Tx>> {
         let prove_request = self.add_fee(prove_request);
         let prev_txs_by_id = txs_by_txid(&prove_request.prev_txs);
 
@@ -636,9 +626,8 @@ impl ProveSpellTx for Prover {
             .json(&prove_request)
             .send()
             .await?;
-        let [commit_tx, spell_tx]: [String; 2] = response.json().await?;
-        let transactions = [deserialize_hex(&commit_tx)?, deserialize_hex(&spell_tx)?].to_vec();
-        Ok(transactions)
+        let txs: Vec<Tx> = response.json().await?;
+        Ok(txs)
     }
 }
 

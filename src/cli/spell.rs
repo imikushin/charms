@@ -13,7 +13,12 @@ use bitcoin::{
     consensus::encode::{deserialize_hex, serialize_hex},
     Transaction,
 };
-use charms_client::{bitcoin_tx::BitcoinTx, cardano_tx::CardanoTx, tx::Tx, SPELL_VK};
+use charms_client::{
+    bitcoin_tx::BitcoinTx,
+    cardano_tx::CardanoTx,
+    tx::{EnchantedTx, Tx},
+    SPELL_VK,
+};
 use std::{future::Future, sync::Arc};
 
 pub trait Check {
@@ -79,7 +84,7 @@ impl Prove for SpellCli {
             .await?;
 
         // Convert transactions to hex and create JSON array
-        let hex_txs: Vec<String> = transactions.iter().map(|tx| serialize_hex(tx)).collect();
+        let hex_txs: Vec<String> = transactions.iter().map(|tx| tx.hex()).collect();
 
         // Print JSON array of transaction hexes
         println!("{}", serde_json::to_string(&hex_txs)?);
@@ -204,6 +209,13 @@ impl Cast for SpellCli {
             })
             .await?;
         let [commit_tx, spell_tx] = txs.as_slice() else {
+            unreachable!()
+        };
+
+        let Tx::Bitcoin(BitcoinTx(commit_tx)) = commit_tx else {
+            unreachable!()
+        };
+        let Tx::Bitcoin(BitcoinTx(spell_tx)) = spell_tx else {
             unreachable!()
         };
 

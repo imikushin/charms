@@ -128,13 +128,13 @@ async fn show_spell_for_tx_hex(
 async fn prove_spell(
     State(prover): State<Arc<AsyncShared<Prover>>>,
     Json(payload): Json<ProveRequest>,
-) -> Result<Json<[String; 2]>, StatusCode> {
+) -> Result<Json<Vec<String>>, StatusCode> {
     let result = prover
         .get()
         .await
         .prove_spell_tx(payload)
         .await
-        .map(|[tx0, tx1]| [serialize_hex(&tx0), serialize_hex(&tx1)])
+        .map(|txs| txs.iter().map(serialize_hex).collect::<Vec<_>>())
         .map_err(|_| StatusCode::BAD_REQUEST)?;
     Ok(Json(result))
 }

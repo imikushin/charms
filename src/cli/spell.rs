@@ -74,6 +74,7 @@ impl Prove for SpellCli {
                 change_address,
                 fee_rate,
                 charms_fee: None,
+                chain,
             })
             .await?;
 
@@ -184,11 +185,11 @@ impl Cast for SpellCli {
         let prev_txs = gather_prev_txs(&spell)?;
 
         let funding_utxo_value = wallet::funding_utxo_value(&funding_utxo)?;
-        let change_address = wallet::new_change_address()?;
+        let change_address = wallet::new_change_address()?.assume_checked().to_string();
 
         let binaries = cli::app::binaries_by_vk(&self.app_prover, app_bins)?;
 
-        let [commit_tx, spell_tx] = self
+        let txs = self
             .spell_prover
             .prove_spell_tx(ProveRequest {
                 spell,
@@ -199,11 +200,15 @@ impl Cast for SpellCli {
                 change_address,
                 fee_rate,
                 charms_fee: None,
+                chain,
             })
             .await?;
+        let [commit_tx, spell_tx] = txs.as_slice() else {
+            unreachable!()
+        };
 
-        let signed_commit_tx_hex = wallet::sign_tx(&serialize_hex(&commit_tx))?;
-        let signed_spell_tx_hex = wallet::sign_spell_tx(&serialize_hex(&spell_tx), &commit_tx)?;
+        let signed_commit_tx_hex = wallet::sign_tx(&serialize_hex(commit_tx))?;
+        let signed_spell_tx_hex = wallet::sign_spell_tx(&serialize_hex(spell_tx), commit_tx)?;
 
         // Print JSON array of transaction hexes
         println!(

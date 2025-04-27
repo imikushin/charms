@@ -39,7 +39,7 @@ pub fn add_spell(
     prev_txs: &BTreeMap<TxId, Tx>,
     charms_fee_pubkey: Option<ScriptBuf>,
     charms_fee: Amount,
-) -> [Transaction; 2] {
+) -> Vec<Transaction> {
     let secp256k1 = Secp256k1::new();
     let keypair = Keypair::new(&secp256k1, &mut thread_rng());
     let (public_key, _) = XOnlyPublicKey::from_keypair(&keypair);
@@ -97,7 +97,7 @@ pub fn add_spell(
     ));
     dbg!(tx.output[tx.output.len() - 1].size());
 
-    [commit_tx, tx]
+    [commit_tx, tx].to_vec()
 }
 
 /// fee covering only the marginal cost of spending the committed spell output.

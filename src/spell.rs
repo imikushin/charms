@@ -2,6 +2,7 @@
 use crate::tx::bitcoin_tx::add_spell;
 use crate::{
     app,
+    cli::{BITCOIN, CARDANO},
     tx::{bitcoin_tx, txs_by_txid},
     utils,
     utils::{BoxedSP1Prover, Shared},
@@ -32,6 +33,7 @@ use sp1_sdk::{SP1ProofMode, SP1Stdin};
 use std::{
     collections::{BTreeMap, BTreeSet},
     env,
+    str::FromStr,
     sync::Arc,
 };
 
@@ -425,7 +427,7 @@ pub trait ProveSpellTx {
     fn prove_spell_tx(
         &self,
         prove_request: ProveRequest,
-    ) -> impl std::future::Future<Output = anyhow::Result<[bitcoin::Transaction; 2]>>;
+    ) -> impl std::future::Future<Output = anyhow::Result<Vec<bitcoin::Transaction>>>;
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -447,9 +449,10 @@ pub struct ProveRequest {
     pub prev_txs: Vec<Tx>,
     pub funding_utxo: OutPoint,
     pub funding_utxo_value: u64,
-    pub change_address: Address<NetworkUnchecked>,
+    pub change_address: String,
     pub fee_rate: f64,
     pub charms_fee: Option<CharmsFee>,
+    pub chain: String,
 }
 
 pub struct Prover {
@@ -474,8 +477,9 @@ impl ProveSpellTx for Prover {
             change_address,
             fee_rate,
             charms_fee,
+            chain,
         }: ProveRequest,
-    ) -> anyhow::Result<[bitcoin::Transaction; 2]> {
+    ) -> anyhow::Result<Vec<bitcoin::Transaction>> {
         let prev_txs_by_id = txs_by_txid(&prev_txs);
 
         let tx = bitcoin_tx::from_spell(&spell)?;
@@ -517,32 +521,42 @@ impl ProveSpellTx for Prover {
         // Serialize spell into CBOR
         let spell_data = util::write(&(&norm_spell, &proof))?;
 
-        // Parse change address into ScriptPubkey
-        let change_pubkey = change_address.assume_checked().script_pubkey();
+        match chain.as_str() {
+            BITCOIN => {
+                let change_address = bitcoin::Address::from_str(&change_address)?;
 
-        let charms_fee_pubkey = charms_fee
-            .clone()
-            .map(|fee| fee.fee_address.assume_checked().script_pubkey());
+                // Parse change address into ScriptPubkey
+                let change_pubkey = change_address.assume_checked().script_pubkey();
 
-        // Calculate fee
-        let charms_fee = get_charms_fee(charms_fee, total_app_cycles, spell_cycles);
+                let charms_fee_pubkey = charms_fee
+                    .clone()
+                    .map(|fee| fee.fee_address.assume_checked().script_pubkey());
 
-        // Parse fee rate
-        let fee_rate = FeeRate::from_sat_per_kwu((fee_rate * 250.0) as u64);
+                // Calculate fee
+                let charms_fee = get_charms_fee(charms_fee, total_app_cycles, spell_cycles);
 
-        // Call the add_spell function
-        let transactions = add_spell(
-            tx.0,
-            &spell_data,
-            funding_utxo,
-            Amount::from_sat(funding_utxo_value),
-            change_pubkey,
-            fee_rate,
-            &prev_txs_by_id,
-            charms_fee_pubkey,
-            charms_fee,
-        );
-        Ok(transactions)
+                // Parse fee rate
+                let fee_rate = FeeRate::from_sat_per_kwu((fee_rate * 250.0) as u64);
+
+                // Call the add_spell function
+                let transactions = add_spell(
+                    tx.0,
+                    &spell_data,
+                    funding_utxo,
+                    Amount::from_sat(funding_utxo_value),
+                    change_pubkey,
+                    fee_rate,
+                    &prev_txs_by_id,
+                    charms_fee_pubkey,
+                    charms_fee,
+                );
+                Ok(transactions)
+            }
+            CARDANO => {
+                todo!()
+            }
+            _ => unreachable!(),
+        }
     }
 
     #[cfg(not(feature = "prover"))]
@@ -550,7 +564,7 @@ impl ProveSpellTx for Prover {
     async fn prove_spell_tx(
         &self,
         prove_request: ProveRequest,
-    ) -> anyhow::Result<[bitcoin::Transaction; 2]> {
+    ) -> anyhow::Result<Vec<bitcoin::Transaction>> {
         let prove_request = self.add_fee(prove_request);
         let prev_txs_by_id = txs_by_txid(&prove_request.prev_txs);
 
@@ -620,7 +634,7 @@ impl ProveSpellTx for Prover {
             .send()
             .await?;
         let [commit_tx, spell_tx]: [String; 2] = response.json().await?;
-        let transactions = [deserialize_hex(&commit_tx)?, deserialize_hex(&spell_tx)?];
+        let transactions = [deserialize_hex(&commit_tx)?, deserialize_hex(&spell_tx)?].to_vec();
         Ok(transactions)
     }
 }

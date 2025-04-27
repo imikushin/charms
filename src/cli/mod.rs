@@ -137,7 +137,7 @@ pub struct SpellProveParams {
 
     /// Address to send the change to.
     #[arg(long)]
-    change_address: Address<NetworkUnchecked>,
+    change_address: String,
 
     /// Fee rate: in sats/vB for Bitcoin.
     #[arg(long, default_value = "2.0")]

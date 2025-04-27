@@ -14,7 +14,7 @@ use bitcoin::{
     consensus::encode::{deserialize_hex, serialize_hex},
     Transaction,
 };
-use charms_client::{bitcoin_tx::BitcoinTx, tx::Tx};
+use charms_client::{bitcoin_tx::BitcoinTx, cardano_tx::CardanoTx, tx::Tx};
 use std::{future::Future, sync::Arc};
 
 pub trait Check {
@@ -121,7 +121,11 @@ impl Check for SpellCli {
         let prev_txs = match prev_txs {
             Some(prev_txs) => prev_txs
                 .iter()
-                .map(|tx_hex| Tx::from_hex(tx_hex))
+                .map(|tx_hex| match chain {
+                    BITCOIN => Ok(Tx::Bitcoin(BitcoinTx::from_hex(tx_hex)?)),
+                    CARDANO => Ok(Tx::Cardano(CardanoTx::from_hex(tx_hex)?)),
+                    _ => unreachable!(),
+                })
                 .collect::<Result<_>>()?,
             None => match tx {
                 Tx::Bitcoin(tx) => cli::tx::get_prev_txs(&tx.0)?,
@@ -134,7 +138,7 @@ impl Check for SpellCli {
         let (norm_spell, app_private_inputs) = spell.normalized()?;
 
         ensure!(
-            charms_client::well_formed(dbg!(&norm_spell), dbg!(&prev_spells)),
+            charms_client::well_formed(&norm_spell, &prev_spells),
             "spell is not well-formed"
         );
 

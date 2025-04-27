@@ -482,13 +482,14 @@ impl ProveSpellTx for Prover {
     ) -> anyhow::Result<Vec<bitcoin::Transaction>> {
         let prev_txs_by_id = txs_by_txid(&prev_txs);
 
-        let tx = bitcoin_tx::from_spell(&spell)?;
-        ensure!(tx
-            .0
-            .input
+        let all_inputs_produced_by_prev_txs = spell
+            .ins
             .iter()
-            .all(|input| prev_txs_by_id
-                .contains_key(&TxId(input.previous_output.txid.to_byte_array()))));
+            .all(|input| prev_txs_by_id.contains_key(&input.utxo_id.as_ref().unwrap().0));
+        ensure!(
+            all_inputs_produced_by_prev_txs,
+            "prev_txs must include transactions for all inputs"
+        );
 
         let (norm_spell, app_private_inputs) = spell.normalized()?;
 
@@ -537,6 +538,8 @@ impl ProveSpellTx for Prover {
 
                 // Parse fee rate
                 let fee_rate = FeeRate::from_sat_per_kwu((fee_rate * 250.0) as u64);
+
+                let tx = bitcoin_tx::from_spell(&spell)?;
 
                 // Call the add_spell function
                 let transactions = add_spell(

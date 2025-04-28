@@ -1,22 +1,18 @@
-#[cfg(feature = "prover")]
-use crate::tx::bitcoin_tx::add_spell;
 use crate::{
     app,
     cli::{BITCOIN, CARDANO},
-    tx::{bitcoin_tx, txs_by_txid},
+    tx::{bitcoin_tx, cardano_tx, txs_by_txid},
     utils,
     utils::{BoxedSP1Prover, Shared},
     SPELL_CHECKER_BINARY,
 };
 use anyhow::{anyhow, ensure, Error};
-#[cfg(feature = "prover")]
-use bitcoin::FeeRate;
-use bitcoin::{address::NetworkUnchecked, hashes::Hash, Address, Amount, OutPoint};
-use charms_client::{bitcoin_tx::BitcoinTx, tx::Tx, SPELL_VK};
+use bitcoin::{address::NetworkUnchecked, hashes::Hash, Address, Amount};
 pub use charms_client::{
     to_tx, NormalizedCharms, NormalizedSpell, NormalizedTransaction, Proof, SpellProverInput,
     CURRENT_VERSION,
 };
+use charms_client::{tx::Tx, SPELL_VK};
 use charms_data::{util, App, Charms, Data, Transaction, TxId, UtxoId, B32};
 #[cfg(not(feature = "prover"))]
 use reqwest::Client;
@@ -26,7 +22,6 @@ use sp1_sdk::{SP1ProofMode, SP1Stdin};
 use std::{
     collections::{BTreeMap, BTreeSet},
     env,
-    str::FromStr,
     sync::Arc,
 };
 
@@ -437,7 +432,7 @@ pub struct ProveRequest {
     #[serde_as(as = "IfIsHumanReadable<BTreeMap<_, Base64>>")]
     pub binaries: BTreeMap<B32, Vec<u8>>,
     pub prev_txs: Vec<Tx>,
-    pub funding_utxo: OutPoint,
+    pub funding_utxo: UtxoId,
     pub funding_utxo_value: u64,
     pub change_address: String,
     pub fee_rate: f64,
@@ -514,42 +509,30 @@ impl ProveSpellTx for Prover {
 
         match chain.as_str() {
             BITCOIN => {
-                let change_address = bitcoin::Address::from_str(&change_address)?;
-
-                // Parse change address into ScriptPubkey
-                let change_pubkey = change_address.assume_checked().script_pubkey();
-
-                let charms_fee_pubkey = charms_fee
-                    .clone()
-                    .map(|fee| fee.fee_address.assume_checked().script_pubkey());
-
-                // Calculate fee
-                let charms_fee = get_charms_fee(charms_fee, total_app_cycles, spell_cycles);
-
-                // Parse fee rate
-                let fee_rate = FeeRate::from_sat_per_kwu((fee_rate * 250.0) as u64);
-
-                let tx = bitcoin_tx::from_spell(&spell)?;
-
-                // Call the add_spell function
-                let transactions = add_spell(
-                    tx.0,
-                    &spell_data,
+                let txs = bitcoin_tx::make_transactions(
+                    &spell,
                     funding_utxo,
-                    Amount::from_sat(funding_utxo_value),
-                    change_pubkey,
-                    fee_rate,
+                    funding_utxo_value,
+                    &change_address,
                     &prev_txs_by_id,
-                    charms_fee_pubkey,
+                    &spell_data,
+                    fee_rate,
                     charms_fee,
-                );
-                Ok(transactions
-                    .into_iter()
-                    .map(|tx| Tx::Bitcoin(BitcoinTx(tx)))
-                    .collect())
+                    total_app_cycles,
+                    spell_cycles,
+                )?;
+                Ok(txs)
             }
             CARDANO => {
-                todo!()
+                let txs = cardano_tx::make_transactions(
+                    &spell,
+                    funding_utxo,
+                    funding_utxo_value,
+                    &change_address,
+                    &prev_txs_by_id,
+                    &spell_data,
+                )?;
+                Ok(txs)
             }
             _ => unreachable!(),
         }
@@ -640,7 +623,7 @@ impl Prover {
     }
 }
 
-fn get_charms_fee(
+pub fn get_charms_fee(
     charms_fee: Option<CharmsFee>,
     total_app_cycles: u64,
     spell_cycles: u64,

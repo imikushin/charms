@@ -19,6 +19,7 @@ use charms_client::{
     tx::{EnchantedTx, Tx},
     SPELL_VK,
 };
+use charms_data::UtxoId;
 use std::{future::Future, sync::Arc};
 
 pub trait Check {
@@ -55,7 +56,7 @@ impl Prove for SpellCli {
         ensure!(chain == "bitcoin", "chain must be bitcoin for now");
 
         // Parse funding UTXO early: to fail fast
-        let funding_utxo = cli::tx::parse_outpoint(&funding_utxo)?;
+        let funding_utxo = UtxoId::from_str(&funding_utxo)?;
 
         ensure!(fee_rate >= 1.0, "fee rate must be >= 1.0");
 
@@ -175,8 +176,11 @@ impl Cast for SpellCli {
     ) -> Result<()> {
         ensure!(chain == "bitcoin", "chain must be bitcoin for now");
 
+        let funding_utxo_str = funding_utxo.as_str();
+
         // Parse funding UTXO early: to fail fast
-        let funding_utxo = cli::tx::parse_outpoint(&funding_utxo)?;
+        let funding_utxo = UtxoId::from_str(&funding_utxo_str)?;
+        let funding_utxo_outpoint = cli::tx::parse_outpoint(funding_utxo_str)?;
 
         ensure!(fee_rate >= 1.0, "fee rate must be >= 1.0");
         let mut spell: Spell = serde_yaml::from_slice(&std::fs::read(spell)?)?;
@@ -189,7 +193,7 @@ impl Cast for SpellCli {
 
         let prev_txs = gather_prev_txs(&spell)?;
 
-        let funding_utxo_value = wallet::funding_utxo_value(&funding_utxo)?;
+        let funding_utxo_value = wallet::funding_utxo_value(&funding_utxo_outpoint)?;
         let change_address = wallet::new_change_address()?.assume_checked().to_string();
 
         let binaries = cli::app::binaries_by_vk(&self.app_prover, app_bins)?;

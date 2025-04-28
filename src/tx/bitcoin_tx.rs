@@ -1,7 +1,9 @@
 use crate::{
     script::{control_block, data_script, taproot_spend_info},
-    spell::{Input, Output, Spell},
+    spell,
+    spell::{CharmsFee, Input, Output, Spell},
 };
+use anyhow::Error;
 use bitcoin::{
     self,
     absolute::LockTime,
@@ -16,7 +18,7 @@ use bitcoin::{
     TxOut, Txid, Weight, Witness, XOnlyPublicKey,
 };
 use charms_client::{bitcoin_tx::BitcoinTx, tx::Tx};
-use charms_data::TxId;
+use charms_data::{TxId, UtxoId};
 use std::{collections::BTreeMap, str::FromStr};
 
 /// `add_spell` adds `spell` to `tx`:
@@ -292,4 +294,53 @@ pub fn from_spell(spell: &Spell) -> anyhow::Result<BitcoinTx> {
         output,
     };
     Ok(BitcoinTx(tx))
+}
+
+pub fn make_transactions(
+    spell: &Spell,
+    funding_utxo: UtxoId,
+    funding_utxo_value: u64,
+    change_address: &String,
+    prev_txs_by_id: &BTreeMap<TxId, Tx>,
+    spell_data: &[u8],
+    fee_rate: f64,
+    charms_fee: Option<CharmsFee>,
+    total_app_cycles: u64,
+    spell_cycles: u64,
+) -> Result<Vec<Tx>, Error> {
+    let change_address = bitcoin::Address::from_str(&change_address)?;
+
+    let funding_utxo = OutPoint::new(Txid::from_byte_array(funding_utxo.0 .0), funding_utxo.1);
+
+    // Parse change address into ScriptPubkey
+    let change_pubkey = change_address.assume_checked().script_pubkey();
+
+    let charms_fee_pubkey = charms_fee
+        .clone()
+        .map(|fee| fee.fee_address.assume_checked().script_pubkey());
+
+    // Calculate fee
+    let charms_fee = spell::get_charms_fee(charms_fee, total_app_cycles, spell_cycles);
+
+    // Parse fee rate
+    let fee_rate = FeeRate::from_sat_per_kwu((fee_rate * 250.0) as u64);
+
+    let tx = from_spell(&spell)?;
+
+    // Call the add_spell function
+    let transactions = add_spell(
+        tx.0,
+        spell_data,
+        funding_utxo,
+        Amount::from_sat(funding_utxo_value),
+        change_pubkey,
+        fee_rate,
+        &prev_txs_by_id,
+        charms_fee_pubkey,
+        charms_fee,
+    );
+    Ok(transactions
+        .into_iter()
+        .map(|tx| Tx::Bitcoin(BitcoinTx(tx)))
+        .collect())
 }

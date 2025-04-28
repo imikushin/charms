@@ -9,10 +9,7 @@ use crate::{
     tx::{bitcoin_tx, cardano_tx},
 };
 use anyhow::{ensure, Error, Result};
-use bitcoin::{
-    consensus::encode::{deserialize_hex, serialize_hex},
-    Transaction,
-};
+use bitcoin::consensus::encode::serialize_hex;
 use charms_client::{
     bitcoin_tx::BitcoinTx,
     cardano_tx::CardanoTx,
@@ -53,8 +50,6 @@ impl Prove for SpellCli {
             chain,
         }: SpellProveParams,
     ) -> Result<()> {
-        ensure!(chain == "bitcoin", "chain must be bitcoin for now");
-
         // Parse funding UTXO early: to fail fast
         let funding_utxo = UtxoId::from_str(&funding_utxo)?;
 
@@ -62,10 +57,17 @@ impl Prove for SpellCli {
 
         let spell: Spell = serde_yaml::from_slice(&std::fs::read(spell)?)?;
 
-        let prev_txs = prev_txs
-            .into_iter()
-            .map(|tx| Ok(Tx::Bitcoin(BitcoinTx(deserialize_hex::<Transaction>(&tx)?))))
-            .collect::<Result<_>>()?;
+        let prev_txs = match chain.as_str() {
+            BITCOIN => prev_txs
+                .into_iter()
+                .map(|tx| Ok(Tx::Bitcoin(BitcoinTx::from_hex(&tx)?)))
+                .collect::<Result<_>>()?,
+            CARDANO => prev_txs
+                .into_iter()
+                .map(|tx| Ok(Tx::Cardano(CardanoTx::from_hex(&tx)?)))
+                .collect::<Result<_>>()?,
+            _ => unreachable!(),
+        };
 
         let binaries = cli::app::binaries_by_vk(&self.app_prover, app_bins)?;
 

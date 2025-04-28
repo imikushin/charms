@@ -1,29 +1,38 @@
 use crate::{spell, spell::Spell};
 use anyhow::Error;
 use cardano_serialization_lib::{
-    Address, Coin, Transaction, TransactionBody, TransactionInput, TransactionInputs,
-    TransactionOutput, TransactionOutputs, TransactionWitnessSet, Value,
+    min_fee_for_size, Address, Coin, LinearFee, PlutusData, Transaction, TransactionBody,
+    TransactionHash, TransactionInput, TransactionInputs, TransactionOutput, TransactionOutputs,
+    TransactionWitnessSet, Value,
 };
 use charms_client::{cardano_tx::CardanoTx, tx::Tx};
 use charms_data::{TxId, UtxoId};
-use std::collections::BTreeMap;
 
 fn tx_input(ins: &[spell::Input]) -> TransactionInputs {
     let mut inputs = TransactionInputs::new();
     for input in ins {
         if let Some(utxo_id) = &input.utxo_id {
-            let tx_input = TransactionInput::new(&utxo_id.0 .0.into(), utxo_id.1.into());
+            let tx_input = TransactionInput::new(&tx_hash(utxo_id.0), utxo_id.1.into());
             inputs.add(&tx_input);
         }
     }
     inputs
 }
 
+fn tx_hash(tx_id: TxId) -> TransactionHash {
+    let mut txid_bytes = tx_id.0;
+    txid_bytes.reverse(); // Charms use Bitcoin's reverse byte order for txids
+    let tx_hash = txid_bytes.into();
+    tx_hash
+}
+
+const ONE_ADA: u64 = 1000000;
+
 fn tx_output(outs: &[spell::Output]) -> anyhow::Result<TransactionOutputs> {
     let mut outputs = TransactionOutputs::new();
     for output in outs {
         if let Some(addr) = &output.address {
-            let amount = output.amount.unwrap_or(1000000); // TODO make a constant
+            let amount = output.amount.unwrap_or(ONE_ADA); // TODO make a constant
             let tx_output = TransactionOutput::new(
                 &Address::from_bech32(addr)?,
                 &Value::new(&Coin::from(amount)),
@@ -54,17 +63,57 @@ fn add_spell(
     funding_utxo: UtxoId,
     funding_utxo_value: u64,
     change_address: Address,
-    prev_txs_by_id: &BTreeMap<TxId, Tx>,
 ) -> Vec<Transaction> {
-    todo!()
+    let tx_body = tx.body();
+
+    let mut tx_inputs = tx_body.inputs();
+    let orig_inputs_count = tx_inputs.len() as u64;
+
+    let mut tx_outputs = tx_body.outputs();
+    let orig_outputs_count = tx_outputs.len() as u64;
+    let mut temp_tx_outputs = tx_body.outputs();
+
+    // TODO: might need to reverse the byte order of the txid
+    let funding_utxo_input = TransactionInput::new(&tx_hash(funding_utxo.0), funding_utxo.1.into());
+    tx_inputs.add(&funding_utxo_input);
+
+    let mut temp_data_output = TransactionOutput::new(&change_address, &Value::new(&Coin::zero()));
+    temp_data_output.set_plutus_data(&PlutusData::new_bytes(spell_data.to_vec()));
+
+    temp_tx_outputs.add(&temp_data_output);
+
+    let temp_tx_body = TransactionBody::new_tx_body(&tx_inputs, &temp_tx_outputs, &Coin::one());
+    let temp_tx_witness_set = TransactionWitnessSet::new();
+    let temp_tx = Transaction::new(&temp_tx_body, &temp_tx_witness_set, None);
+
+    let min_fee_a: u64 = 44; // lovelace/byte
+    let min_fee_b: u64 = 155381 + 50000; // lovelace
+    let linear_fee = LinearFee::new(&min_fee_a.into(), &min_fee_b.into());
+
+    let fee = min_fee_for_size(temp_tx.to_bytes().len() + 100, &linear_fee).unwrap();
+
+    let change =
+        Coin::from(funding_utxo_value + orig_inputs_count * ONE_ADA - orig_outputs_count * ONE_ADA)
+            .checked_sub(&fee)
+            .unwrap();
+
+    let mut data_output = TransactionOutput::new(&change_address, &Value::new(&change));
+    data_output.set_plutus_data(&PlutusData::new_bytes(spell_data.to_vec()));
+
+    tx_outputs.add(&data_output);
+
+    let tx_body = TransactionBody::new_tx_body(&tx_inputs, &tx_outputs, &fee);
+    let tx_witness_set = TransactionWitnessSet::new();
+    let tx = Transaction::new(&tx_body, &tx_witness_set, None);
+
+    vec![tx]
 }
 
-pub(crate) fn make_transactions(
+pub fn make_transactions(
     spell: &Spell,
     funding_utxo: UtxoId,
     funding_utxo_value: u64,
     change_address: &String,
-    prev_txs_by_id: &BTreeMap<TxId, Tx>,
     spell_data: &[u8],
 ) -> Result<Vec<Tx>, Error> {
     let change_address = Address::from_bech32(change_address)?;
@@ -76,7 +125,6 @@ pub(crate) fn make_transactions(
         funding_utxo,
         funding_utxo_value,
         change_address,
-        prev_txs_by_id,
     );
     Ok(transactions
         .into_iter()

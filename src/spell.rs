@@ -8,6 +8,8 @@ use crate::{
 };
 use anyhow::{anyhow, ensure, Error};
 use bitcoin::{address::NetworkUnchecked, hashes::Hash, Address, Amount};
+#[cfg(not(feature = "prover"))]
+use charms_client::bitcoin_tx::BitcoinTx;
 pub use charms_client::{
     to_tx, NormalizedCharms, NormalizedSpell, NormalizedTransaction, Proof, SpellProverInput,
     CURRENT_VERSION,
@@ -529,7 +531,6 @@ impl ProveSpellTx for Prover {
                     funding_utxo,
                     funding_utxo_value,
                     &change_address,
-                    &prev_txs_by_id,
                     &spell_data,
                 )?;
                 Ok(txs)

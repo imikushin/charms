@@ -187,9 +187,13 @@ pub enum TxCommands {
     /// Show the spell in a transaction. If the transaction has a spell and its valid proof, it
     /// will be printed to stdout.
     ShowSpell {
+        #[arg(long, default_value = "bitcoin")]
+        chain: String,
+
         /// Hex-encoded transaction.
         #[arg(long)]
         tx: String,
+
         /// Output in JSON format (default is YAML).
         #[arg(long)]
         json: bool,
@@ -285,7 +289,7 @@ pub async fn run() -> anyhow::Result<()> {
             }
         }
         Commands::Tx { command } => match command {
-            TxCommands::ShowSpell { tx, json } => tx::tx_show_spell(tx, json),
+            TxCommands::ShowSpell { chain, tx, json } => tx::tx_show_spell(chain, tx, json),
         },
         Commands::App { command } => match command {
             AppCommands::New { name } => app::new(&name),

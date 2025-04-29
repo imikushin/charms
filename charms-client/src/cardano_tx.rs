@@ -83,7 +83,8 @@ fn spell_with_ins(spell: NormalizedSpell, tx_ins: TransactionInputs) -> Normaliz
         .into_iter()
         .take(n)
         .map(|tx_in| {
-            let txid = tx_in.transaction_id().to_bytes().try_into().unwrap();
+            let mut txid: [u8; 32] = tx_in.transaction_id().to_bytes().try_into().unwrap();
+            txid.reverse();
             let index = tx_in.index();
 
             UtxoId(TxId(txid), index)

@@ -1,10 +1,14 @@
-use crate::{cli, tx};
+use crate::{
+    cli,
+    cli::{BITCOIN, CARDANO},
+    tx,
+};
 use anyhow::{anyhow, Result};
 use bitcoin::{
     consensus::encode::{deserialize_hex, serialize_hex},
     OutPoint, Transaction,
 };
-use charms_client::{bitcoin_tx::BitcoinTx, tx::Tx};
+use charms_client::{bitcoin_tx::BitcoinTx, cardano_tx::CardanoTx, tx::Tx};
 use std::process::Command;
 
 pub(crate) fn parse_outpoint(s: &str) -> Result<OutPoint> {
@@ -16,10 +20,14 @@ pub(crate) fn parse_outpoint(s: &str) -> Result<OutPoint> {
     Ok(OutPoint::new(parts[0].parse()?, parts[1].parse()?))
 }
 
-pub fn tx_show_spell(tx: String, json: bool) -> Result<()> {
-    let tx = deserialize_hex::<Transaction>(&tx)?;
+pub fn tx_show_spell(chain: String, tx: String, json: bool) -> Result<()> {
+    let tx = match chain.as_str() {
+        BITCOIN => Tx::Bitcoin(BitcoinTx::from_hex(&tx)?),
+        CARDANO => Tx::Cardano(CardanoTx::from_hex(&tx)?),
+        _ => unimplemented!(),
+    };
 
-    match tx::spell(&Tx::Bitcoin(BitcoinTx(tx))) {
+    match tx::spell(&tx) {
         Some(spell) => cli::print_output(&spell, json)?,
         None => eprintln!("No spell found in the transaction"),
     }

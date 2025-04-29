@@ -58,11 +58,8 @@ impl Tx {
 /// Extract a [`NormalizedSpell`] from a transaction and verify it.
 /// Incorrect spells are rejected.
 #[tracing::instrument(level = "debug", skip_all)]
-pub fn extract_and_verify_spell(
-    spell_vk: &str,
-    enchanted_tx: &Tx,
-) -> anyhow::Result<NormalizedSpell> {
-    enchanted_tx.extract_and_verify_spell(spell_vk)
+pub fn extract_and_verify_spell(spell_vk: &str, tx: &Tx) -> anyhow::Result<NormalizedSpell> {
+    tx.extract_and_verify_spell(spell_vk)
 }
 
 pub fn vks(spell_version: u32, spell_vk: &str) -> anyhow::Result<(&str, &[u8])> {
@@ -86,7 +83,11 @@ pub fn to_sp1_pv<T: Serialize>(spell_version: u32, t: &T) -> SP1PublicValues {
             // we commit to CBOR-encoded tuple `(spell_vk, n_spell)`
             pv.write_slice(util::write(t).unwrap().as_slice());
         }
-        V2 | V1 => {
+        V2 => {
+            // we commit to CBOR-encoded tuple `(spell_vk, n_spell)`
+            pv.write_slice(util::write(t).unwrap().as_slice());
+        }
+        V1 => {
             // we commit to CBOR-encoded tuple `(spell_vk, n_spell)`
             pv.write_slice(util::write(t).unwrap().as_slice());
         }

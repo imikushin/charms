@@ -2,11 +2,14 @@ use crate::{spell, spell::Spell};
 use anyhow::Error;
 use cardano_serialization_lib::{
     min_fee_for_size, Address, Coin, LinearFee, PlutusData, Transaction, TransactionBody,
-    TransactionHash, TransactionInput, TransactionInputs, TransactionOutput, TransactionOutputs,
+    TransactionInput, TransactionInputs, TransactionOutput, TransactionOutputs,
     TransactionWitnessSet, Value,
 };
-use charms_client::{cardano_tx::CardanoTx, tx::Tx};
-use charms_data::{TxId, UtxoId};
+use charms_client::{
+    cardano_tx::{tx_hash, CardanoTx},
+    tx::Tx,
+};
+use charms_data::UtxoId;
 
 fn tx_input(ins: &[spell::Input]) -> TransactionInputs {
     let mut inputs = TransactionInputs::new();
@@ -17,13 +20,6 @@ fn tx_input(ins: &[spell::Input]) -> TransactionInputs {
         }
     }
     inputs
-}
-
-fn tx_hash(tx_id: TxId) -> TransactionHash {
-    let mut txid_bytes = tx_id.0;
-    txid_bytes.reverse(); // Charms use Bitcoin's reverse byte order for txids
-    let tx_hash = txid_bytes.into();
-    tx_hash
 }
 
 const ONE_ADA: u64 = 1000000;

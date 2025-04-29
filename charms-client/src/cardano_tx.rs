@@ -1,6 +1,8 @@
 use crate::{tx::EnchantedTx, NormalizedSpell, Proof};
 use anyhow::{anyhow, ensure};
-use cardano_serialization_lib::{chain_crypto::Blake2b256, Transaction, TransactionInputs};
+use cardano_serialization_lib::{
+    chain_crypto::Blake2b256, Transaction, TransactionHash, TransactionInputs,
+};
 use charms_data::{util, TxId, UtxoId};
 use serde::{Deserialize, Serialize};
 use sp1_verifier::Groth16Verifier;
@@ -66,10 +68,9 @@ impl EnchantedTx for CardanoTx {
     }
 
     fn tx_id(&self) -> TxId {
-        let transaction_hash = Blake2b256::new(&self.0.body().to_bytes());
-        let mut txid: [u8; 32] = transaction_hash.into();
-        txid.reverse(); // Cardano seems to store IDs reverted compared to Bitcoin txid format
-        TxId(txid)
+        let bytes: [u8; 32] = Blake2b256::new(&self.0.body().to_bytes()).into();
+        let transaction_hash = TransactionHash::from(bytes);
+        tx_id(transaction_hash)
     }
 
     fn hex(&self) -> String {
@@ -83,11 +84,10 @@ fn spell_with_ins(spell: NormalizedSpell, tx_ins: TransactionInputs) -> Normaliz
         .into_iter()
         .take(n)
         .map(|tx_in| {
-            let mut txid: [u8; 32] = tx_in.transaction_id().to_bytes().try_into().unwrap();
-            txid.reverse();
+            let tx_id = tx_id(tx_in.transaction_id());
             let index = tx_in.index();
 
-            UtxoId(TxId(txid), index)
+            UtxoId(tx_id, index)
         })
         .collect();
 
@@ -95,4 +95,18 @@ fn spell_with_ins(spell: NormalizedSpell, tx_ins: TransactionInputs) -> Normaliz
     spell.tx.ins = Some(tx_ins);
 
     spell
+}
+
+pub fn tx_id(transaction_hash: TransactionHash) -> TxId {
+    let mut txid: [u8; 32] = transaction_hash.to_bytes().try_into().unwrap();
+    txid.reverse(); // Charms use Bitcoin's reverse byte order for txids
+    let tx_id = TxId(txid);
+    tx_id
+}
+
+pub fn tx_hash(tx_id: TxId) -> TransactionHash {
+    let mut txid_bytes = tx_id.0;
+    txid_bytes.reverse(); // Charms use Bitcoin's reverse byte order for txids
+    let tx_hash = txid_bytes.into();
+    tx_hash
 }

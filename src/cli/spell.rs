@@ -17,6 +17,7 @@ use charms_client::{
     SPELL_VK,
 };
 use charms_data::UtxoId;
+use serde_json::json;
 use std::{future::Future, sync::Arc};
 
 pub trait Check {
@@ -82,15 +83,32 @@ impl Prove for SpellCli {
                 change_address,
                 fee_rate,
                 charms_fee: None,
-                chain,
+                chain: chain.clone(),
             })
             .await?;
 
-        // Convert transactions to hex and create JSON array
-        let hex_txs: Vec<String> = transactions.iter().map(|tx| tx.hex()).collect();
+        match chain.as_str() {
+            BITCOIN => {
+                // Convert transactions to hex and create JSON array
+                let hex_txs: Vec<String> = transactions.iter().map(|tx| tx.hex()).collect();
 
-        // Print JSON array of transaction hexes
-        println!("{}", serde_json::to_string(&hex_txs)?);
+                // Print JSON array of transaction hexes
+                println!("{}", serde_json::to_string(&hex_txs)?);
+            }
+            CARDANO => {
+                let Some(Tx::Cardano(CardanoTx(tx))) = transactions.into_iter().next() else {
+                    unreachable!()
+                };
+                let tx_hex = tx.to_hex();
+                let tx_draft = json!({
+                    "type": "Unwitnessed Tx ConwayEra",
+                    "description": "Ledger Cddl Format",
+                    "cborHex": tx_hex,
+                });
+                println!("{}", tx_draft);
+            }
+            _ => unreachable!(),
+        }
 
         Ok(())
     }

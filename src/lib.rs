@@ -8,10 +8,13 @@ pub mod utils;
 /// RISC-V binary compiled from `charms-spell-checker`.
 pub const SPELL_CHECKER_BINARY: &[u8] = include_bytes!("./bin/charms-spell-checker");
 
+/// Verification key for the `charms-spell-checker` binary.
+pub const SPELL_VK: &str = "0x00498c6a2c61a9c68b6063fcc4cb9872c581c3f90cdf37377b83fb934de74219";
+
 #[cfg(test)]
 mod test {
     use super::*;
-    use charms_client::SPELL_VK;
+    use crate::SPELL_VK;
     use sp1_sdk::{HashableKey, Prover, ProverClient};
 
     #[test]

@@ -13,8 +13,6 @@ pub const V0_SPELL_VK: &str = "0x00e9398ac819e6dd281f81db3ada3fe5159c3cc40222b5d
 pub const V1_SPELL_VK: &str = "0x009f38f590ebca4c08c1e97b4064f39e4cd336eea4069669c5f5170a38a1ff97";
 /// Verification key for version `2` of the protocol implemented by `charms-spell-checker` binary.
 pub const V2_SPELL_VK: &str = "0x00bd312b6026dbe4a2c16da1e8118d4fea31587a4b572b63155252d2daf69280";
-/// Verification key for version `3` of the protocol implemented by `charms-spell-checker` binary.
-pub const V3_SPELL_VK: &str = "0x00879e6282dfcb471539a65db552ba028ebcbaf270272a749883da7743df6c52";
 
 /// Version `0` of the protocol.
 pub const V0: u32 = 0u32;
@@ -25,8 +23,6 @@ pub const V2: u32 = 2u32;
 /// Version `3` of the protocol.
 pub const V3: u32 = 3u32;
 
-/// Verification key for the `charms-spell-checker` binary.
-pub const SPELL_VK: &str = V3_SPELL_VK;
 /// Current version of the protocol.
 pub const CURRENT_VERSION: u32 = V3;
 

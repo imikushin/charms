@@ -7,6 +7,7 @@ use crate::{
     spell,
     spell::{ProveRequest, ProveSpellTx, Spell},
     tx::{bitcoin_tx, cardano_tx},
+    SPELL_VK,
 };
 use anyhow::{ensure, Error, Result};
 use bitcoin::consensus::encode::serialize_hex;
@@ -14,7 +15,6 @@ use charms_client::{
     bitcoin_tx::BitcoinTx,
     cardano_tx::CardanoTx,
     tx::{EnchantedTx, Tx},
-    SPELL_VK,
 };
 use charms_data::UtxoId;
 use serde_json::json;

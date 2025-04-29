@@ -186,9 +186,18 @@ impl Spell {
             })
             .collect::<Result<_, Error>>()?;
 
+        let beamed_ins = None;
+        let beamed_outs = None;
+
         let norm_spell = NormalizedSpell {
             version: self.version,
-            tx: NormalizedTransaction { ins, refs, outs },
+            tx: NormalizedTransaction {
+                ins,
+                refs,
+                outs,
+                beamed_ins,
+                beamed_outs,
+            },
             app_public_inputs,
         };
 

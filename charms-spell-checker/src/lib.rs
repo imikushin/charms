@@ -17,6 +17,7 @@ pub(crate) fn is_correct(
         eprintln!("not well formed");
         return false;
     }
+    // TODO include beaming source tx_ids in spell.tx.prev_txids()
     let Some(prev_txids) = spell.tx.prev_txids() else {
         unreachable!("the spell is well formed: tx.ins MUST be Some");
     };

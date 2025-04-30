@@ -60,10 +60,20 @@ pub struct NormalizedTransaction {
 
 impl NormalizedTransaction {
     /// Return a sorted set of transaction IDs of the inputs.
+    /// Including source tx_ids for beamed inputs.
     pub fn prev_txids(&self) -> Option<BTreeSet<&TxId>> {
-        self.ins
+        let beam_source_txids: BTreeSet<_> = self
+            .beamed_ins
             .as_ref()
-            .map(|ins| ins.iter().map(|utxo_id| &utxo_id.0).collect())
+            .map(|beamed_ins| beamed_ins.values().map(|utxo_id| &utxo_id.0).collect())
+            .unwrap_or_default();
+
+        let txids_opt = self
+            .ins
+            .as_ref()
+            .map(|ins| ins.iter().map(|utxo_id| &utxo_id.0).collect());
+
+        txids_opt.map(|set: BTreeSet<_>| set.union(&beam_source_txids).cloned().collect())
     }
 }
 

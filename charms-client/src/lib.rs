@@ -29,7 +29,7 @@ pub const CURRENT_VERSION: u32 = V3;
 
 /// Maps the index of the charm's app (in [`NormalizedSpell`].`app_public_inputs`) to the charm's
 /// data.
-pub type NormalizedCharms = BTreeMap<usize, Data>;
+pub type NormalizedCharms = BTreeMap<u32, Data>;
 
 /// Normalized representation of a Charms transaction.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -51,11 +51,11 @@ pub struct NormalizedTransaction {
 
     /// Optional mapping from the beamed input index to the beaming source UtxoId.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub beamed_ins: Option<BTreeMap<usize, UtxoId>>,
+    pub beamed_ins: Option<BTreeMap<u32, UtxoId>>,
 
     /// Optional mapping from the beamed output index to the destination UtxoId.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub beamed_outs: Option<BTreeMap<usize, B32>>,
+    pub beamed_outs: Option<BTreeMap<u32, B32>>,
 }
 
 impl NormalizedTransaction {
@@ -124,7 +124,6 @@ pub fn prev_spells(
         .collect()
 }
 
-// TODO check beamed outputs are not spent directly
 // TODO check beamed inputs are produced by one of prev_spells
 /// Check if the spell is well-formed.
 #[tracing::instrument(level = "debug", skip(spell, prev_spells))]
@@ -139,18 +138,28 @@ pub fn well_formed(
         );
         return false;
     }
-    let created_by_prev_spells = |utxo_id: &UtxoId| -> bool {
+    let directly_created_by_prev_spells = |utxo_id: &UtxoId| -> bool {
+        let tx_id = utxo_id.0;
         prev_spells
-            .get(&utxo_id.0)
-            .and_then(|(_, num_tx_outs)| Some(utxo_id.1 as usize <= *num_tx_outs))
+            .get(&tx_id)
+            .and_then(|(n_spell_opt, num_tx_outs)| {
+                let utxo_index = utxo_id.1;
+
+                let is_beamed_out = n_spell_opt
+                    .as_ref()
+                    .and_then(|n_spell| n_spell.tx.beamed_outs.as_ref())
+                    .and_then(|beamed_outs| beamed_outs.get(&utxo_index))
+                    .is_some();
+
+                Some(utxo_index <= *num_tx_outs as u32 && !is_beamed_out)
+            })
             == Some(true)
     };
-    if !spell
-        .tx
-        .outs
-        .iter()
-        .all(|n_charm| n_charm.keys().all(|i| i < &spell.app_public_inputs.len()))
-    {
+    if !spell.tx.outs.iter().all(|n_charm| {
+        n_charm
+            .keys()
+            .all(|&i| i < spell.app_public_inputs.len() as u32)
+    }) {
         eprintln!("charm app index higher than app_public_inputs.len()");
         return false;
     }
@@ -160,10 +169,10 @@ pub fn well_formed(
         eprintln!("no tx.ins");
         return false;
     };
-    if !tx_ins.iter().all(created_by_prev_spells)
-        || !spell.tx.refs.iter().all(created_by_prev_spells)
+    if !tx_ins.iter().all(directly_created_by_prev_spells)
+        || !spell.tx.refs.iter().all(directly_created_by_prev_spells)
     {
-        eprintln!("input or reference UTXOs are not created by prev transactions");
+        eprintln!("input or reference UTXOs are not directly created by prev_txns");
         return false;
     }
     true
@@ -212,7 +221,7 @@ pub fn charms(spell: &NormalizedSpell, n_charms: &NormalizedCharms) -> Charms {
     let apps = apps(spell);
     n_charms
         .iter()
-        .map(|(&i, data)| (apps[i].clone(), data.clone()))
+        .map(|(&i, data)| (apps[i as usize].clone(), data.clone()))
         .collect()
 }
 

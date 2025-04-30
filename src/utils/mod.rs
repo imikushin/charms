@@ -10,7 +10,7 @@ pub(crate) mod sp1;
 pub type BoxedSP1Prover = Box<dyn sp1_sdk::Prover<CpuProverComponents>>;
 
 /// Create a string representation of the index `i` in the format `$xxxx`.
-pub fn str_index(i: &usize) -> String {
+pub fn str_index(i: &u32) -> String {
     format!("${:04}", i)
 }
 

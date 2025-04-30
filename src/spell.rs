@@ -139,7 +139,7 @@ impl Spell {
 
         let keyed_apps = &self.apps;
         let apps: BTreeSet<App> = keyed_apps.values().cloned().collect();
-        let app_to_index: BTreeMap<App, usize> = apps.iter().cloned().zip(0..).collect();
+        let app_to_index: BTreeMap<App, u32> = apps.iter().cloned().zip(0..).collect();
         ensure!(apps.len() == keyed_apps.len(), "duplicate apps");
 
         let app_public_inputs: BTreeMap<App, Data> = app_inputs(keyed_apps, keyed_public_inputs);
@@ -176,7 +176,7 @@ impl Spell {
                     .iter()
                     .map(|(k, v)| {
                         let app = keyed_apps.get(k).ok_or(anyhow!("missing app key"))?;
-                        let i: usize = *app_to_index
+                        let i = *app_to_index
                             .get(app)
                             .expect("app should be in app_to_index");
                         Ok((i, Data::from(v)))

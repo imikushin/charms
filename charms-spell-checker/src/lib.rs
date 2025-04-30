@@ -30,16 +30,12 @@ pub(crate) fn is_correct(
         eprintln!("apps.len() != app_contract_proofs.len()");
         return false;
     }
+    let charms_tx = charms_client::to_tx(spell, &prev_spells);
     if !apps
         .iter()
         .zip(app_contract_vks)
         .all(|(app0, (app, proof))| {
-            app == app0
-                && proof.verify(
-                    app,
-                    &charms_client::to_tx(spell, &prev_spells),
-                    &spell.app_public_inputs[app],
-                )
+            app == app0 && proof.verify(app, &charms_tx, &spell.app_public_inputs[app])
         })
     {
         eprintln!("app_contract_proofs verification failed");

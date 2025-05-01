@@ -69,7 +69,6 @@ fn add_spell(
     let orig_outputs_count = tx_outputs.len() as u64;
     let mut temp_tx_outputs = tx_body.outputs();
 
-    // TODO: might need to reverse the byte order of the txid
     let funding_utxo_input = TransactionInput::new(&tx_hash(funding_utxo.0), funding_utxo.1.into());
     tx_inputs.add(&funding_utxo_input);
 

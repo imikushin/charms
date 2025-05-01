@@ -49,10 +49,6 @@ pub struct NormalizedTransaction {
     /// **Must not** be larger than the number of outputs in the hosting transaction.
     pub outs: Vec<NormalizedCharms>,
 
-    /// Optional mapping from the beamed input index to the beaming source UtxoId.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub beamed_ins: Option<BTreeMap<u32, UtxoId>>,
-
     /// Optional mapping from the beamed output index to the destination UtxoId.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub beamed_outs: Option<BTreeMap<u32, B32>>,
@@ -62,18 +58,9 @@ impl NormalizedTransaction {
     /// Return a sorted set of transaction IDs of the inputs.
     /// Including source tx_ids for beamed inputs.
     pub fn prev_txids(&self) -> Option<BTreeSet<&TxId>> {
-        let beam_source_txids: BTreeSet<_> = self
-            .beamed_ins
+        self.ins
             .as_ref()
-            .map(|beamed_ins| beamed_ins.values().map(|utxo_id| &utxo_id.0).collect())
-            .unwrap_or_default();
-
-        let txids_opt = self
-            .ins
-            .as_ref()
-            .map(|ins| ins.iter().map(|utxo_id| &utxo_id.0).collect());
-
-        txids_opt.map(|set: BTreeSet<_>| set.union(&beam_source_txids).cloned().collect())
+            .map(|ins| ins.iter().map(|utxo_id| &utxo_id.0).collect())
     }
 }
 
@@ -129,7 +116,7 @@ pub fn prev_spells(
 pub fn well_formed(
     spell: &NormalizedSpell,
     prev_spells: &BTreeMap<TxId, (Option<NormalizedSpell>, usize)>,
-    beamed_source_utxos_hint: &BTreeMap<u32, UtxoId>,
+    tx_ins_beamed_source_utxos: &BTreeMap<UtxoId, UtxoId>,
 ) -> bool {
     check!(spell.version == CURRENT_VERSION);
     let directly_created_by_prev_txns = |utxo_id: &UtxoId| -> bool {
@@ -165,38 +152,34 @@ pub fn well_formed(
         tx_ins.iter().all(directly_created_by_prev_txns)
             && spell.tx.refs.iter().all(directly_created_by_prev_txns)
     );
-    let beamed_source_utxos_point_to_placeholder_dest_utxos =
-        beamed_source_utxos_hint
-            .iter()
-            .all(|(&tx_in_index, beaming_source_utxo_id)| {
-                let Some(tx_in_utxo_id) = tx_ins.get(tx_in_index as usize) else {
-                    return false;
-                };
-                let prev_txid = tx_in_utxo_id.0;
-                let prev_tx = prev_spells.get(&prev_txid);
-                let Some((prev_spell_opt, _tx_outs)) = prev_tx else {
-                    // prev_tx should be provided, so we know it doesn't carry a spell
-                    return false;
-                };
-                // prev_tx must exist but not carry a spell
-                check!(prev_spell_opt.is_none());
+    let beamed_source_utxos_point_to_placeholder_dest_utxos = tx_ins_beamed_source_utxos
+        .iter()
+        .all(|(tx_in_utxo_id, beaming_source_utxo_id)| {
+            let prev_txid = tx_in_utxo_id.0;
+            let prev_tx = prev_spells.get(&prev_txid);
+            let Some((prev_spell_opt, _tx_outs)) = prev_tx else {
+                // prev_tx should be provided, so we know it doesn't carry a spell
+                return false;
+            };
+            // prev_tx must exist but not carry a spell
+            check!(prev_spell_opt.is_none());
 
-                let beaming_txid = beaming_source_utxo_id.0;
-                let beaming_utxo_index = beaming_source_utxo_id.1;
+            let beaming_txid = beaming_source_utxo_id.0;
+            let beaming_utxo_index = beaming_source_utxo_id.1;
 
-                prev_spells
-                    .get(&beaming_txid)
-                    .and_then(|(n_spell_opt, _tx_outs)| {
-                        n_spell_opt.as_ref().and_then(|n_spell| {
-                            n_spell
-                                .tx
-                                .beamed_outs
-                                .as_ref()
-                                .and_then(|beamed_outs| beamed_outs.get(&beaming_utxo_index))
-                        })
+            prev_spells
+                .get(&beaming_txid)
+                .and_then(|(n_spell_opt, _tx_outs)| {
+                    n_spell_opt.as_ref().and_then(|n_spell| {
+                        n_spell
+                            .tx
+                            .beamed_outs
+                            .as_ref()
+                            .and_then(|beamed_outs| beamed_outs.get(&beaming_utxo_index))
                     })
-                    .is_some_and(|dest_utxo_hash| dest_utxo_hash == &utxo_id_hash(tx_in_utxo_id))
-            });
+                })
+                .is_some_and(|dest_utxo_hash| dest_utxo_hash == &utxo_id_hash(tx_in_utxo_id))
+        });
     check!(beamed_source_utxos_point_to_placeholder_dest_utxos);
     true
 }
@@ -210,17 +193,19 @@ pub fn apps(spell: &NormalizedSpell) -> Vec<App> {
 pub fn to_tx(
     spell: &NormalizedSpell,
     prev_spells: &BTreeMap<TxId, (Option<NormalizedSpell>, usize)>,
+    tx_ins_beamed_source_utxos: &BTreeMap<UtxoId, UtxoId>,
 ) -> Transaction {
     let from_utxo_id = |utxo_id: &UtxoId| -> (UtxoId, Charms) {
         let (prev_spell_opt, _) = &prev_spells[&utxo_id.0];
         let charms = prev_spell_opt
             .as_ref()
-            .and_then(|prev_spell| {
-                prev_spell
-                    .tx
-                    .outs
-                    .get(utxo_id.1 as usize)
-                    .map(|n_charms| charms(prev_spell, n_charms))
+            .and_then(|prev_spell| charms_in_utxo(prev_spell, utxo_id))
+            .or_else(|| {
+                let beam_source_utxo_id = &tx_ins_beamed_source_utxos[utxo_id];
+                prev_spells[&beam_source_utxo_id.0]
+                    .0
+                    .as_ref()
+                    .and_then(|prev_spell| charms_in_utxo(prev_spell, beam_source_utxo_id))
             })
             .unwrap_or_default();
         (utxo_id.clone(), charms)
@@ -239,6 +224,14 @@ pub fn to_tx(
     }
 }
 
+fn charms_in_utxo(prev_spell: &NormalizedSpell, utxo_id: &UtxoId) -> Option<Charms> {
+    prev_spell
+        .tx
+        .outs
+        .get(utxo_id.1 as usize)
+        .map(|n_charms| charms(prev_spell, n_charms))
+}
+
 /// Return [`charms_data::Charms`] for the given [`NormalizedCharms`].
 pub fn charms(spell: &NormalizedSpell, n_charms: &NormalizedCharms) -> Charms {
     let apps = apps(spell);
@@ -253,7 +246,7 @@ pub struct SpellProverInput {
     pub self_spell_vk: String,
     pub prev_txs: Vec<Tx>,
     pub spell: NormalizedSpell,
-    pub beamed_source_utxos_hint: BTreeMap<u32, UtxoId>,
+    pub tx_ins_beamed_source_utxos: BTreeMap<UtxoId, UtxoId>,
     /// indices of apps in the spell that have contract proofs
     pub app_contract_proofs: BTreeSet<usize>, // proofs are provided in input stream data
 }

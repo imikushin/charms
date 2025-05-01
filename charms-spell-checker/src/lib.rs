@@ -4,7 +4,7 @@ pub mod bin;
 use crate::app::AppContractVK;
 use charms_client::{tx::Tx, NormalizedSpell};
 use charms_data::{App, UtxoId};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Check if the spell is correct.
 pub(crate) fn is_correct(
@@ -12,17 +12,19 @@ pub(crate) fn is_correct(
     prev_txs: &Vec<Tx>,
     app_contract_vks: &Vec<(App, AppContractVK)>,
     spell_vk: &String,
-    beamed_source_utxos_hint: &BTreeMap<u32, UtxoId>,
+    tx_ins_beamed_source_utxos: &BTreeMap<UtxoId, UtxoId>,
 ) -> bool {
     let prev_spells = charms_client::prev_spells(prev_txs, spell_vk);
-    if !charms_client::well_formed(spell, &prev_spells, beamed_source_utxos_hint) {
+    if !charms_client::well_formed(spell, &prev_spells, tx_ins_beamed_source_utxos) {
         eprintln!("not well formed");
         return false;
     }
     let Some(prev_txids) = spell.tx.prev_txids() else {
         unreachable!("the spell is well formed: tx.ins MUST be Some");
     };
-    if prev_txids != prev_spells.keys().collect() {
+    let beam_source_txids: BTreeSet<_> =
+        tx_ins_beamed_source_utxos.values().map(|u| &u.0).collect();
+    if prev_txids.union(&beam_source_txids) != prev_spells.keys().collect() {
         eprintln!("spell.tx.prev_txids() != prev_spells.keys()");
         return false;
     }
@@ -32,7 +34,7 @@ pub(crate) fn is_correct(
         eprintln!("apps.len() != app_contract_proofs.len()");
         return false;
     }
-    let charms_tx = charms_client::to_tx(spell, &prev_spells);
+    let charms_tx = charms_client::to_tx(spell, &prev_spells, tx_ins_beamed_source_utxos);
     if !apps
         .iter()
         .zip(app_contract_vks)

@@ -38,6 +38,8 @@ pub struct Input {
     pub utxo_id: Option<UtxoId>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub charms: Option<KeyedCharms>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub beamed_from: Option<UtxoId>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -48,6 +50,8 @@ pub struct Output {
     pub amount: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub charms: Option<KeyedCharms>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub beamed_to: Option<B32>,
 }
 
 /// Defines how spells are represented in their source form and in CLI outputs,
@@ -135,7 +139,11 @@ impl Spell {
     /// Get a [`NormalizedSpell`] and apps' private inputs for the spell.
     pub fn normalized(
         &self,
-    ) -> anyhow::Result<(NormalizedSpell, BTreeMap<App, Data>, BTreeMap<u32, UtxoId>)> {
+    ) -> anyhow::Result<(
+        NormalizedSpell,
+        BTreeMap<App, Data>,
+        BTreeMap<UtxoId, UtxoId>,
+    )> {
         let empty_map = BTreeMap::new();
         let keyed_public_inputs = self.public_inputs.as_ref().unwrap_or(&empty_map);
 
@@ -188,8 +196,7 @@ impl Spell {
             })
             .collect::<Result<_, Error>>()?;
 
-        let beamed_ins = None;
-        let beamed_outs = None;
+        let beamed_outs = None; // TODO gather beamed outputs
 
         let norm_spell = NormalizedSpell {
             version: self.version,
@@ -197,7 +204,6 @@ impl Spell {
                 ins,
                 refs,
                 outs,
-                beamed_ins,
                 beamed_outs,
             },
             app_public_inputs,
@@ -206,9 +212,23 @@ impl Spell {
         let keyed_private_inputs = self.private_inputs.as_ref().unwrap_or(&empty_map);
         let app_private_inputs = app_inputs(keyed_apps, keyed_private_inputs);
 
-        let beamed_input_source_utxos = BTreeMap::new(); // TODO read from spell
+        let tx_ins_beamed_source_utxos = self
+            .ins
+            .iter()
+            .filter_map(|input| {
+                let tx_in = input
+                    .utxo_id
+                    .as_ref()
+                    .expect("inputs should have utxo_id set")
+                    .clone();
+                input
+                    .beamed_from
+                    .as_ref()
+                    .map(|beam_source_utxo_id| (tx_in, beam_source_utxo_id.clone()))
+            })
+            .collect();
 
-        Ok((norm_spell, app_private_inputs, beamed_input_source_utxos))
+        Ok((norm_spell, app_private_inputs, tx_ins_beamed_source_utxos))
     }
 
     /// De-normalize a normalized spell.
@@ -242,6 +262,7 @@ impl Spell {
             .map(|utxo_id| Input {
                 utxo_id: Some(utxo_id.clone()),
                 charms: None,
+                beamed_from: None,
             })
             .collect();
 
@@ -252,6 +273,7 @@ impl Spell {
             .map(|utxo_id| Input {
                 utxo_id: Some(utxo_id.clone()),
                 charms: None,
+                beamed_from: None,
             })
             .collect::<Vec<_>>()
         {
@@ -263,7 +285,8 @@ impl Spell {
             .tx
             .outs
             .iter()
-            .map(|n_charms| Output {
+            .zip(0u32..)
+            .map(|(n_charms, i)| Output {
                 address: None,
                 amount: None,
                 charms: match n_charms
@@ -279,6 +302,11 @@ impl Spell {
                     charms if charms.is_empty() => None,
                     charms => Some(charms),
                 },
+                beamed_to: norm_spell
+                    .tx
+                    .beamed_outs
+                    .as_ref()
+                    .and_then(|beamed_to| beamed_to.get(&i).cloned()),
             })
             .collect();
 
@@ -322,7 +350,7 @@ pub trait Prove {
         app_binaries: &BTreeMap<B32, Vec<u8>>,
         app_private_inputs: BTreeMap<App, Data>,
         prev_txs: Vec<Tx>,
-        beamed_source_utxos_hint: BTreeMap<u32, UtxoId>,
+        tx_ins_beamed_source_utxos: BTreeMap<UtxoId, UtxoId>,
         expected_cycles: Option<Vec<u64>>,
     ) -> anyhow::Result<(NormalizedSpell, Proof, u64)>;
 }
@@ -334,12 +362,13 @@ impl Prove for Prover {
         app_binaries: &BTreeMap<B32, Vec<u8>>,
         app_private_inputs: BTreeMap<App, Data>,
         prev_txs: Vec<Tx>,
-        beamed_source_utxos_hint: BTreeMap<u32, UtxoId>,
+        tx_ins_beamed_source_utxos: BTreeMap<UtxoId, UtxoId>,
         _expected_cycles: Option<Vec<u64>>,
     ) -> anyhow::Result<(NormalizedSpell, Proof, u64)> {
         let mut stdin = SP1Stdin::new();
 
         let prev_spells = charms_client::prev_spells(&prev_txs, SPELL_VK);
+        let tx = to_tx(&norm_spell, &prev_spells, &tx_ins_beamed_source_utxos);
 
         let app_contract_proofs = norm_spell
             .app_public_inputs
@@ -351,7 +380,7 @@ impl Prove for Prover {
             self_spell_vk: SPELL_VK.to_string(),
             prev_txs,
             spell: norm_spell.clone(),
-            beamed_source_utxos_hint,
+            tx_ins_beamed_source_utxos,
             app_contract_proofs,
         };
         let input_vec: Vec<u8> = util::write(&prover_input)?;
@@ -360,7 +389,6 @@ impl Prove for Prover {
 
         stdin.write_vec(input_vec);
 
-        let tx = to_tx(&norm_spell, &prev_spells);
         let app_public_inputs = &norm_spell.app_public_inputs;
 
         // TODO add a way to pass the expected cycles to the prover, remove this
@@ -494,10 +522,10 @@ impl ProveSpellTx for Prover {
             "prev_txs must include transactions for all inputs"
         );
 
-        let (norm_spell, app_private_inputs, beamed_source_utxos_hint) = spell.normalized()?;
+        let (norm_spell, app_private_inputs, tx_ins_beamed_source_utxos) = spell.normalized()?;
 
         let prev_spells = charms_client::prev_spells(&prev_txs, SPELL_VK);
-        let charms_tx = to_tx(&norm_spell, &prev_spells);
+        let charms_tx = to_tx(&norm_spell, &prev_spells, &tx_ins_beamed_source_utxos);
 
         let expected_cycles = self.app_prover.run_all(
             &binaries,
@@ -513,7 +541,7 @@ impl ProveSpellTx for Prover {
             &binaries,
             app_private_inputs,
             prev_txs,
-            beamed_source_utxos_hint,
+            tx_ins_beamed_source_utxos,
             Some(expected_cycles),
         )?;
 
@@ -571,10 +599,11 @@ impl ProveSpellTx for Prover {
             .all(|input| prev_txs_by_id
                 .contains_key(&TxId(input.previous_output.txid.to_byte_array()))));
 
-        let (norm_spell, app_private_inputs, _) = prove_request.spell.normalized()?;
+        let (norm_spell, app_private_inputs, tx_ins_beamed_source_utxos) =
+            prove_request.spell.normalized()?;
 
         let prev_spells = charms_client::prev_spells(&prove_request.prev_txs, SPELL_VK);
-        let charms_tx = to_tx(&norm_spell, &prev_spells);
+        let charms_tx = to_tx(&norm_spell, &prev_spells, &tx_ins_beamed_source_utxos);
 
         let expected_cycles = self.app_prover.run_all(
             &prove_request.binaries,

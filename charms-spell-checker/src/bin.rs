@@ -21,7 +21,7 @@ pub(crate) fn run(input: SpellProverInput) -> (String, NormalizedSpell) {
         self_spell_vk,
         prev_txs,
         spell,
-        beamed_source_utxos_hint,
+        tx_ins_beamed_source_utxos,
         app_contract_proofs,
     } = input;
 
@@ -41,7 +41,7 @@ pub(crate) fn run(input: SpellProverInput) -> (String, NormalizedSpell) {
         &prev_txs,
         &app_contract_proofs,
         &self_spell_vk,
-        &beamed_source_utxos_hint,
+        &tx_ins_beamed_source_utxos,
     ));
 
     eprintln!("Spell is correct!");

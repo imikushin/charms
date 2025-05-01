@@ -3,7 +3,8 @@ pub mod bin;
 
 use crate::app::AppContractVK;
 use charms_client::{tx::Tx, NormalizedSpell};
-use charms_data::App;
+use charms_data::{App, UtxoId};
+use std::collections::BTreeMap;
 
 /// Check if the spell is correct.
 pub(crate) fn is_correct(
@@ -11,9 +12,10 @@ pub(crate) fn is_correct(
     prev_txs: &Vec<Tx>,
     app_contract_vks: &Vec<(App, AppContractVK)>,
     spell_vk: &String,
+    beamed_source_utxos_hint: &BTreeMap<u32, UtxoId>,
 ) -> bool {
     let prev_spells = charms_client::prev_spells(prev_txs, spell_vk);
-    if !charms_client::well_formed(spell, &prev_spells) {
+    if !charms_client::well_formed(spell, &prev_spells, beamed_source_utxos_hint) {
         eprintln!("not well formed");
         return false;
     }

@@ -1,5 +1,5 @@
 use crate::tx::{extract_and_verify_spell, EnchantedTx, Tx};
-use charms_data::{App, Charms, Data, Transaction, TxId, UtxoId, B32};
+use charms_data::{check, App, Charms, Data, Transaction, TxId, UtxoId, B32};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
@@ -124,25 +124,19 @@ pub fn prev_spells(
         .collect()
 }
 
-// TODO check beamed inputs are produced by one of prev_spells
 /// Check if the spell is well-formed.
 #[tracing::instrument(level = "debug", skip(spell, prev_spells))]
 pub fn well_formed(
     spell: &NormalizedSpell,
     prev_spells: &BTreeMap<TxId, (Option<NormalizedSpell>, usize)>,
+    beamed_source_utxos_hint: &BTreeMap<u32, UtxoId>,
 ) -> bool {
-    if spell.version != CURRENT_VERSION {
-        eprintln!(
-            "spell version {} is not the current version {}",
-            spell.version, CURRENT_VERSION
-        );
-        return false;
-    }
-    let directly_created_by_prev_spells = |utxo_id: &UtxoId| -> bool {
+    check!(spell.version == CURRENT_VERSION);
+    let directly_created_by_prev_txns = |utxo_id: &UtxoId| -> bool {
         let tx_id = utxo_id.0;
         prev_spells
             .get(&tx_id)
-            .and_then(|(n_spell_opt, num_tx_outs)| {
+            .is_some_and(|(n_spell_opt, num_tx_outs)| {
                 let utxo_index = utxo_id.1;
 
                 let is_beamed_out = n_spell_opt
@@ -151,30 +145,59 @@ pub fn well_formed(
                     .and_then(|beamed_outs| beamed_outs.get(&utxo_index))
                     .is_some();
 
-                Some(utxo_index <= *num_tx_outs as u32 && !is_beamed_out)
+                utxo_index <= *num_tx_outs as u32 && !is_beamed_out
             })
-            == Some(true)
     };
-    if !spell.tx.outs.iter().all(|n_charm| {
-        n_charm
-            .keys()
-            .all(|&i| i < spell.app_public_inputs.len() as u32)
-    }) {
-        eprintln!("charm app index higher than app_public_inputs.len()");
-        return false;
-    }
+    check!({
+        spell.tx.outs.iter().all(|n_charm| {
+            n_charm
+                .keys()
+                .all(|&i| i < spell.app_public_inputs.len() as u32)
+        })
+    });
     // check that UTXOs we're spending or referencing in this tx
     // are created by pre-req transactions
     let Some(tx_ins) = &spell.tx.ins else {
         eprintln!("no tx.ins");
         return false;
     };
-    if !tx_ins.iter().all(directly_created_by_prev_spells)
-        || !spell.tx.refs.iter().all(directly_created_by_prev_spells)
-    {
-        eprintln!("input or reference UTXOs are not directly created by prev_txns");
-        return false;
-    }
+    check!(
+        tx_ins.iter().all(directly_created_by_prev_txns)
+            && spell.tx.refs.iter().all(directly_created_by_prev_txns)
+    );
+    let beamed_source_utxos_point_to_placeholder_dest_utxos =
+        beamed_source_utxos_hint
+            .iter()
+            .all(|(&tx_in_index, beaming_source_utxo_id)| {
+                let Some(tx_in_utxo_id) = tx_ins.get(tx_in_index as usize) else {
+                    return false;
+                };
+                let prev_txid = tx_in_utxo_id.0;
+                let prev_tx = prev_spells.get(&prev_txid);
+                let Some((prev_spell_opt, _tx_outs)) = prev_tx else {
+                    // prev_tx should be provided, so we know it doesn't carry a spell
+                    return false;
+                };
+                // prev_tx must exist but not carry a spell
+                check!(prev_spell_opt.is_none());
+
+                let beaming_txid = beaming_source_utxo_id.0;
+                let beaming_utxo_index = beaming_source_utxo_id.1;
+
+                prev_spells
+                    .get(&beaming_txid)
+                    .and_then(|(n_spell_opt, _tx_outs)| {
+                        n_spell_opt.as_ref().and_then(|n_spell| {
+                            n_spell
+                                .tx
+                                .beamed_outs
+                                .as_ref()
+                                .and_then(|beamed_outs| beamed_outs.get(&beaming_utxo_index))
+                        })
+                    })
+                    .is_some_and(|dest_utxo_hash| dest_utxo_hash == &utxo_id_hash(tx_in_utxo_id))
+            });
+    check!(beamed_source_utxos_point_to_placeholder_dest_utxos);
     true
 }
 
@@ -230,6 +253,7 @@ pub struct SpellProverInput {
     pub self_spell_vk: String,
     pub prev_txs: Vec<Tx>,
     pub spell: NormalizedSpell,
+    pub beamed_source_utxos_hint: BTreeMap<u32, UtxoId>,
     /// indices of apps in the spell that have contract proofs
     pub app_contract_proofs: BTreeSet<usize>, // proofs are provided in input stream data
 }

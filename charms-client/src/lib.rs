@@ -199,11 +199,14 @@ pub fn to_tx(
             .as_ref()
             .and_then(|prev_spell| charms_in_utxo(prev_spell, utxo_id))
             .or_else(|| {
-                let beam_source_utxo_id = &tx_ins_beamed_source_utxos[utxo_id];
-                prev_spells[&beam_source_utxo_id.0]
-                    .0
-                    .as_ref()
-                    .and_then(|prev_spell| charms_in_utxo(prev_spell, beam_source_utxo_id))
+                tx_ins_beamed_source_utxos
+                    .get(utxo_id)
+                    .and_then(|beam_source_utxo_id| {
+                        prev_spells[&beam_source_utxo_id.0]
+                            .0
+                            .as_ref()
+                            .and_then(|prev_spell| charms_in_utxo(prev_spell, beam_source_utxo_id))
+                    })
             })
             .unwrap_or_default();
         (utxo_id.clone(), charms)

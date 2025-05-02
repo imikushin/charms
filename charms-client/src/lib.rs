@@ -80,10 +80,8 @@ pub struct NormalizedSpell {
 }
 
 pub fn utxo_id_hash(utxo_id: &UtxoId) -> B32 {
-    let mut hasher = Sha256::new();
-    hasher.update(utxo_id.to_bytes().as_slice());
-    let result: [u8; 32] = hasher.finalize().into();
-    B32(result)
+    let hash = Sha256::digest(utxo_id.to_bytes());
+    B32(hash.into())
 }
 
 /// Extract spells from previous transactions.

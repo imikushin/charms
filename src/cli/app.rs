@@ -112,8 +112,8 @@ pub fn run(spell: PathBuf, path: Option<PathBuf>) -> Result<()> {
     )?;
     let tx = spell.to_tx()?;
 
-    let public_inputs = spell.public_inputs.unwrap_or_default();
-    let private_inputs = spell.private_inputs.unwrap_or_default();
+    let public_inputs = spell.public_args.unwrap_or_default();
+    let private_inputs = spell.private_args.unwrap_or_default();
 
     let mut app_present = false;
     for (k, app) in spell.apps.iter().filter(|(_, app)| app.vk == vk) {

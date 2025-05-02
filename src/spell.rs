@@ -66,12 +66,12 @@ pub struct Spell {
     pub apps: BTreeMap<String, App>,
 
     /// Public inputs to the apps for this spell. Map of `$KEY: Data`.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub public_inputs: Option<BTreeMap<String, Data>>,
+    #[serde(alias = "public_inputs", skip_serializing_if = "Option::is_none")]
+    pub public_args: Option<BTreeMap<String, Data>>,
 
     /// Private inputs to the apps for this spell. Map of `$KEY: Data`.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub private_inputs: Option<BTreeMap<String, Data>>,
+    #[serde(alias = "private_inputs", skip_serializing_if = "Option::is_none")]
+    pub private_args: Option<BTreeMap<String, Data>>,
 
     /// Transaction inputs.
     pub ins: Vec<Input>,
@@ -88,8 +88,8 @@ impl Spell {
         Self {
             version: CURRENT_VERSION,
             apps: BTreeMap::new(),
-            public_inputs: None,
-            private_inputs: None,
+            public_args: None,
+            private_args: None,
             ins: vec![],
             refs: None,
             outs: vec![],
@@ -145,7 +145,7 @@ impl Spell {
         BTreeMap<UtxoId, UtxoId>,
     )> {
         let empty_map = BTreeMap::new();
-        let keyed_public_inputs = self.public_inputs.as_ref().unwrap_or(&empty_map);
+        let keyed_public_inputs = self.public_args.as_ref().unwrap_or(&empty_map);
 
         let keyed_apps = &self.apps;
         let apps: BTreeSet<App> = keyed_apps.values().cloned().collect();
@@ -209,7 +209,7 @@ impl Spell {
             app_public_inputs,
         };
 
-        let keyed_private_inputs = self.private_inputs.as_ref().unwrap_or(&empty_map);
+        let keyed_private_inputs = self.private_args.as_ref().unwrap_or(&empty_map);
         let app_private_inputs = app_inputs(keyed_apps, keyed_private_inputs);
 
         let tx_ins_beamed_source_utxos = self
@@ -313,8 +313,8 @@ impl Spell {
         Self {
             version: norm_spell.version,
             apps,
-            public_inputs,
-            private_inputs: None,
+            public_args: public_inputs,
+            private_args: None,
             ins,
             refs,
             outs,

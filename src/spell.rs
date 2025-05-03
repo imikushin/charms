@@ -50,8 +50,8 @@ pub struct Output {
     pub amount: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub charms: Option<KeyedCharms>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub beamed_to: Option<B32>,
+    #[serde(alias = "beamed_to", skip_serializing_if = "Option::is_none")]
+    pub beam_to: Option<B32>,
 }
 
 /// Defines how spells are represented in their source form and in CLI outputs,
@@ -196,7 +196,13 @@ impl Spell {
             })
             .collect::<Result<_, Error>>()?;
 
-        let beamed_outs = None; // TODO gather beamed outputs
+        let beamed_outs: BTreeMap<_, _> = self
+            .outs
+            .iter()
+            .zip(0u32..)
+            .filter_map(|(o, i)| o.beam_to.as_ref().map(|b32| (i, b32.clone())))
+            .collect();
+        let beamed_outs = Some(beamed_outs).filter(|m| !m.is_empty());
 
         let norm_spell = NormalizedSpell {
             version: self.version,
@@ -302,7 +308,7 @@ impl Spell {
                     charms if charms.is_empty() => None,
                     charms => Some(charms),
                 },
-                beamed_to: norm_spell
+                beam_to: norm_spell
                     .tx
                     .beamed_outs
                     .as_ref()

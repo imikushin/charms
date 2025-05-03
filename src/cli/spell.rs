@@ -58,17 +58,10 @@ impl Prove for SpellCli {
 
         let spell: Spell = serde_yaml::from_slice(&std::fs::read(spell)?)?;
 
-        let prev_txs = match chain.as_str() {
-            BITCOIN => prev_txs
-                .into_iter()
-                .map(|tx| Ok(Tx::Bitcoin(BitcoinTx::from_hex(&tx)?)))
-                .collect::<Result<_>>()?,
-            CARDANO => prev_txs
-                .into_iter()
-                .map(|tx| Ok(Tx::Cardano(CardanoTx::from_hex(&tx)?)))
-                .collect::<Result<_>>()?,
-            _ => unreachable!(),
-        };
+        let prev_txs = prev_txs
+            .into_iter()
+            .map(|tx| Tx::from_hex(&tx))
+            .collect::<Result<_>>()?;
 
         let binaries = cli::app::binaries_by_vk(&self.app_prover, app_bins)?;
 
@@ -147,11 +140,7 @@ impl Check for SpellCli {
         let prev_txs = match prev_txs {
             Some(prev_txs) => prev_txs
                 .iter()
-                .map(|tx_hex| match chain {
-                    BITCOIN => Ok(Tx::Bitcoin(BitcoinTx::from_hex(tx_hex)?)),
-                    CARDANO => Ok(Tx::Cardano(CardanoTx::from_hex(tx_hex)?)),
-                    _ => unreachable!(),
-                })
+                .map(|tx_hex| Tx::from_hex(tx_hex))
                 .collect::<Result<_>>()?,
             None => match tx {
                 Tx::Bitcoin(tx) => cli::tx::get_prev_txs(&tx.0)?,

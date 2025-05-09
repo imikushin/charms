@@ -262,6 +262,12 @@ pub struct SpellCastParams {
     /// Target chain, defaults to `bitcoin`.
     #[arg(long, default_value = "bitcoin")]
     chain: String,
+
+    /// Pre-requisite transactions (hex-encoded) separated by commas (`,`).
+    /// These are the transactions that create the UTXOs that the `tx` (and the spell) spends.
+    /// If the spell has any reference UTXOs, the transactions creating them must also be included.
+    #[arg(long, value_delimiter = ',')]
+    prev_txs: Option<Vec<String>>,
 }
 
 #[derive(Subcommand)]

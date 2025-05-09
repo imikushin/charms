@@ -583,6 +583,7 @@ impl ProveSpellTx for Prover {
                     funding_utxo_value,
                     &change_address,
                     &spell_data,
+                    &prev_txs_by_id,
                 )?;
                 Ok(txs)
             }

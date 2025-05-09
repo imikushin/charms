@@ -181,6 +181,7 @@ impl Cast for SpellCli {
             funding_utxo,
             fee_rate,
             chain,
+            prev_txs,
         }: SpellCastParams,
     ) -> Result<()> {
         ensure!(chain == "bitcoin", "chain must be bitcoin for now");
@@ -200,7 +201,17 @@ impl Cast for SpellCli {
             u.amount.get_or_insert(MIN_SATS);
         }
 
-        let prev_txs = gather_prev_txs(&spell)?;
+        let prev_txs = match prev_txs {
+            Some(prev_txs) => prev_txs
+                .iter()
+                .map(|tx_hex| Tx::from_hex(tx_hex))
+                .collect::<Result<_>>()?,
+            None => match chain.as_str() {
+                BITCOIN => gather_prev_txs(&spell)?,
+                CARDANO => todo!(),
+                _ => unimplemented!(),
+            },
+        };
 
         let funding_utxo_value = wallet::funding_utxo_value(&funding_utxo_outpoint)?;
         let change_address = wallet::new_change_address()?.assume_checked().to_string();

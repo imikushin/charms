@@ -6,10 +6,11 @@ use cardano_serialization_lib::{
     TransactionWitnessSet, Value,
 };
 use charms_client::{
-    cardano_tx::{tx_hash, CardanoTx},
+    cardano_tx::{tx_hash, tx_id, CardanoTx},
     tx::Tx,
 };
-use charms_data::UtxoId;
+use charms_data::{TxId, UtxoId};
+use std::collections::BTreeMap;
 
 fn tx_input(ins: &[spell::Input]) -> TransactionInputs {
     let mut inputs = TransactionInputs::new();
@@ -22,13 +23,13 @@ fn tx_input(ins: &[spell::Input]) -> TransactionInputs {
     inputs
 }
 
-const ONE_ADA: u64 = 1000000;
+pub const ONE_ADA: u64 = 1000000;
 
 fn tx_output(outs: &[spell::Output]) -> anyhow::Result<TransactionOutputs> {
     let mut outputs = TransactionOutputs::new();
     for output in outs {
         if let Some(addr) = &output.address {
-            let amount = output.amount.unwrap_or(ONE_ADA); // TODO make a constant
+            let amount = output.amount.unwrap_or(ONE_ADA);
             let tx_output = TransactionOutput::new(
                 &Address::from_bech32(addr)?,
                 &Value::new(&Coin::from(amount)),
@@ -43,7 +44,7 @@ pub fn from_spell(spell: &Spell) -> anyhow::Result<CardanoTx> {
     let inputs = tx_input(&spell.ins);
     let outputs = tx_output(&spell.outs)?;
 
-    let fee = Coin::zero(); // TODO: calculate fee
+    let fee = Coin::zero();
 
     let body = TransactionBody::new_tx_body(&inputs, &outputs, &fee);
     let witness_set = TransactionWitnessSet::new();
@@ -59,11 +60,12 @@ fn add_spell(
     funding_utxo: UtxoId,
     funding_utxo_value: u64,
     change_address: Address,
+    prev_txs_by_id: &BTreeMap<TxId, Tx>,
 ) -> Vec<Transaction> {
     let tx_body = tx.body();
 
     let mut tx_inputs = tx_body.inputs();
-    let orig_inputs_count = tx_inputs.len() as u64;
+    let orig_inputs_amount = inputs_total_amount(tx_body.inputs(), prev_txs_by_id);
 
     let mut tx_outputs = tx_body.outputs();
     let orig_outputs_count = tx_outputs.len() as u64;
@@ -87,10 +89,9 @@ fn add_spell(
 
     let fee = min_fee_for_size(temp_tx.to_bytes().len() + 100, &linear_fee).unwrap();
 
-    let change =
-        Coin::from(funding_utxo_value + orig_inputs_count * ONE_ADA - orig_outputs_count * ONE_ADA)
-            .checked_sub(&fee)
-            .unwrap();
+    let change = Coin::from(funding_utxo_value + orig_inputs_amount - orig_outputs_count * ONE_ADA)
+        .checked_sub(&fee)
+        .unwrap();
 
     let mut data_output = TransactionOutput::new(&change_address, &Value::new(&change));
     data_output.set_plutus_data(&PlutusData::new_bytes(spell_data.to_vec()));
@@ -104,12 +105,28 @@ fn add_spell(
     vec![tx]
 }
 
+fn inputs_total_amount(tx_inputs: TransactionInputs, prev_txs_by_id: &BTreeMap<TxId, Tx>) -> u64 {
+    tx_inputs
+        .into_iter()
+        .map(|tx_input| {
+            let tx_id = tx_id(tx_input.transaction_id());
+            let Some(Tx::Cardano(CardanoTx(tx))) = prev_txs_by_id.get(&tx_id) else {
+                unreachable!("we should already have the tx in the map")
+            };
+            let prev_tx_out = tx.body().outputs().get(tx_input.index() as usize);
+            let amount: u64 = prev_tx_out.amount().coin().into();
+            amount
+        })
+        .sum()
+}
+
 pub fn make_transactions(
     spell: &Spell,
     funding_utxo: UtxoId,
     funding_utxo_value: u64,
     change_address: &String,
     spell_data: &[u8],
+    prev_txs_by_id: &BTreeMap<TxId, Tx>,
 ) -> Result<Vec<Tx>, Error> {
     let change_address = Address::from_bech32(change_address)?;
     let tx = from_spell(spell)?;
@@ -120,6 +137,7 @@ pub fn make_transactions(
         funding_utxo,
         funding_utxo_value,
         change_address,
+        prev_txs_by_id,
     );
     Ok(transactions
         .into_iter()

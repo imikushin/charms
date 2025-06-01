@@ -100,11 +100,11 @@ impl Prover {
 
                         tracing::info!("running app: {}", app);
 
-                        let (committed_values, report) = self.sp1_client.get().inner().execute(
-                            app_binary,
-                            &app_stdin,
-                            sp1_context,
-                        )?;
+                        let (committed_values, _digest, report) = self
+                            .sp1_client
+                            .get()
+                            .inner()
+                            .execute(app_binary, &app_stdin, sp1_context)?;
 
                         let cycles = report.total_instruction_count();
                         if let Some(expected_cycles) = expected_cycles {

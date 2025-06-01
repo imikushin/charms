@@ -96,12 +96,12 @@ pub fn parse_spell_and_proof(spell_tx_in: &TxIn) -> anyhow::Result<(NormalizedSp
         "the Taproot tree contains more than one leaf: only a single script is supported"
     );
 
-    let script = spell_tx_in
+    let leaf_script = spell_tx_in
         .witness
-        .tapscript()
+        .taproot_leaf_script()
         .ok_or(anyhow!("no spell data in the last input's witness"))?;
 
-    let mut instructions = script.instructions();
+    let mut instructions = leaf_script.script.instructions();
 
     ensure!(instructions.next() == Some(Ok(Instruction::PushBytes(PushBytes::empty()))));
     ensure!(instructions.next() == Some(Ok(Instruction::Op(OP_IF))));

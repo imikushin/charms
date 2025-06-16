@@ -397,6 +397,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "axum-macros"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "604fde5e028fea851ce1d8570bbdc034bec850d157f7569d10f347d06808c05c"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.101",
+]
+
+[[package]]
 name = "backoff"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -837,6 +848,7 @@ version = "0.6.0"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
+ "axum-macros",
  "bincode",
  "bitcoin",
  "bitcoincore-rpc",

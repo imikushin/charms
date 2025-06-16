@@ -315,9 +315,12 @@ pub fn make_transactions(
     // Parse change address into ScriptPubkey
     let change_pubkey = change_address.assume_checked().script_pubkey();
 
-    let charms_fee_pubkey = charms_fee
-        .clone()
-        .map(|fee| fee.fee_address.assume_checked().script_pubkey());
+    let charms_fee_pubkey = charms_fee.clone().map(|fee| {
+        Address::from_str(&fee.fee_address)
+            .unwrap()
+            .assume_checked()
+            .script_pubkey()
+    });
 
     // Calculate fee
     let charms_fee = spell::get_charms_fee(charms_fee, total_app_cycles, spell_cycles);

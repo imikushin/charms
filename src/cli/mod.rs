@@ -363,7 +363,7 @@ fn charms_fee_settings() -> Option<CharmsFee> {
         let charms_fee_rate = charms_fee_rate();
         let charms_fee_base = charms_fee_base();
         CharmsFee {
-            fee_address,
+            fee_address: fee_address.assume_checked().to_string(),
             fee_rate: charms_fee_rate,
             fee_base: charms_fee_base,
         }

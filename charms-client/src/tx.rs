@@ -53,6 +53,13 @@ impl Tx {
             bail!("invalid hex")
         }
     }
+
+    pub fn hex(&self) -> String {
+        match self {
+            Tx::Bitcoin(tx) => tx.hex(),
+            Tx::Cardano(tx) => tx.hex(),
+        }
+    }
 }
 
 /// Extract a [`NormalizedSpell`] from a transaction and verify it.

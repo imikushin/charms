@@ -10,12 +10,8 @@ use crate::{
     SPELL_VK,
 };
 use anyhow::{ensure, Error, Result};
-use bitcoin::consensus::encode::serialize_hex;
-use charms_client::{
-    bitcoin_tx::BitcoinTx,
-    cardano_tx::CardanoTx,
-    tx::{EnchantedTx, Tx},
-};
+use bitcoin::consensus::encode::deserialize_hex;
+use charms_client::tx::Tx;
 use charms_data::UtxoId;
 use serde_json::json;
 use std::{future::Future, sync::Arc};
@@ -58,11 +54,6 @@ impl Prove for SpellCli {
 
         let spell: Spell = serde_yaml::from_slice(&std::fs::read(spell)?)?;
 
-        let prev_txs = prev_txs
-            .into_iter()
-            .map(|tx| Tx::from_hex(&tx))
-            .collect::<Result<_>>()?;
-
         let binaries = cli::app::binaries_by_vk(&self.app_prover, app_bins)?;
 
         let transactions = self
@@ -83,16 +74,15 @@ impl Prove for SpellCli {
         match chain.as_str() {
             BITCOIN => {
                 // Convert transactions to hex and create JSON array
-                let hex_txs: Vec<String> = transactions.iter().map(|tx| tx.hex()).collect();
+                let hex_txs: Vec<String> = transactions;
 
                 // Print JSON array of transaction hexes
                 println!("{}", serde_json::to_string(&hex_txs)?);
             }
             CARDANO => {
-                let Some(Tx::Cardano(CardanoTx(tx))) = transactions.into_iter().next() else {
+                let Some(tx_hex) = transactions.into_iter().next() else {
                     unreachable!()
                 };
-                let tx_hex = tx.to_hex();
                 let tx_draft = json!({
                     "type": "Unwitnessed Tx ConwayEra",
                     "description": "Ledger Cddl Format",
@@ -138,15 +128,17 @@ impl Check for SpellCli {
         };
 
         let prev_txs = match prev_txs {
-            Some(prev_txs) => prev_txs
-                .iter()
-                .map(|tx_hex| Tx::from_hex(tx_hex))
-                .collect::<Result<_>>()?,
+            Some(prev_txs) => prev_txs,
             None => match tx {
                 Tx::Bitcoin(tx) => cli::tx::get_prev_txs(&tx.0)?,
                 Tx::Cardano(_) => todo!(),
             },
         };
+
+        let prev_txs = prev_txs
+            .iter()
+            .map(|tx_hex| Tx::from_hex(tx_hex))
+            .collect::<Result<Vec<_>, _>>()?;
 
         let prev_spells = charms_client::prev_spells(&prev_txs, &SPELL_VK);
 
@@ -202,10 +194,7 @@ impl Cast for SpellCli {
         }
 
         let prev_txs = match prev_txs {
-            Some(prev_txs) => prev_txs
-                .iter()
-                .map(|tx_hex| Tx::from_hex(tx_hex))
-                .collect::<Result<_>>()?,
+            Some(prev_txs) => prev_txs,
             None => match chain.as_str() {
                 BITCOIN => gather_prev_txs(&spell)?,
                 CARDANO => todo!(),
@@ -236,15 +225,8 @@ impl Cast for SpellCli {
             unreachable!()
         };
 
-        let Tx::Bitcoin(BitcoinTx(commit_tx)) = commit_tx else {
-            unreachable!()
-        };
-        let Tx::Bitcoin(BitcoinTx(spell_tx)) = spell_tx else {
-            unreachable!()
-        };
-
-        let signed_commit_tx_hex = wallet::sign_tx(&serialize_hex(commit_tx))?;
-        let signed_spell_tx_hex = wallet::sign_spell_tx(&serialize_hex(spell_tx), commit_tx)?;
+        let signed_commit_tx_hex = wallet::sign_tx(&commit_tx)?;
+        let signed_spell_tx_hex = wallet::sign_spell_tx(&spell_tx, &deserialize_hex(commit_tx)?)?;
 
         // Print JSON array of transaction hexes
         println!(
@@ -257,7 +239,7 @@ impl Cast for SpellCli {
 }
 
 #[tracing::instrument(level = "debug", skip(spell))]
-fn gather_prev_txs(spell: &Spell) -> Result<Vec<Tx>, Error> {
+fn gather_prev_txs(spell: &Spell) -> Result<Vec<String>, Error> {
     let tx = bitcoin_tx::from_spell(&spell)?;
     let prev_txs = cli::tx::get_prev_txs(&tx.0)?;
     Ok(prev_txs)

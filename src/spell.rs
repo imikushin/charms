@@ -627,6 +627,7 @@ impl Prover {
         let prev_txs = from_hex_txs(&prev_txs)?;
         let prev_txs_by_id = txs_by_txid(&prev_txs);
 
+        // TODO either make this cross-chain or delete
         let tx = bitcoin_tx::from_spell(&prove_request.spell)?;
         // let encoded_tx = EncodedTx::Bitcoin(BitcoinTx(tx.clone()));
         ensure!(tx

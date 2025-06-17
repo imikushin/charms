@@ -1,10 +1,14 @@
 use crate::{
     app,
-    cli::{BITCOIN, CARDANO},
-    tx::{bitcoin_tx, cardano_tx, txs_by_txid},
+    tx::{bitcoin_tx, txs_by_txid},
     utils,
     utils::{BoxedSP1Prover, Shared},
     SPELL_CHECKER_BINARY, SPELL_VK,
+};
+#[cfg(feature = "prover")]
+use crate::{
+    cli::{BITCOIN, CARDANO},
+    tx::cardano_tx,
 };
 use anyhow::{anyhow, ensure, Error};
 use bitcoin::{hashes::Hash, Amount};
@@ -596,6 +600,29 @@ impl ProveSpellTx for Prover {
     #[tracing::instrument(level = "info", skip_all)]
     async fn prove_spell_tx(&self, prove_request: ProveRequest) -> anyhow::Result<Vec<String>> {
         let prove_request = self.add_fee(prove_request);
+        self.validate_prove_request(&prove_request)?;
+
+        let response = self
+            .client
+            .post(&self.charms_prove_api_url)
+            .json(&prove_request)
+            .send()
+            .await?;
+        let txs: Vec<String> = response.json().await?;
+        Ok(txs)
+    }
+}
+
+impl Prover {
+    #[cfg(not(feature = "prover"))]
+    fn add_fee(&self, prove_request: ProveRequest) -> ProveRequest {
+        let mut prove_request = prove_request;
+        prove_request.charms_fee = self.charms_fee_settings.clone();
+        prove_request
+    }
+
+    #[cfg(not(feature = "prover"))]
+    fn validate_prove_request(&self, prove_request: &ProveRequest) -> Result<(), Error> {
         let prev_txs = &prove_request.prev_txs;
         let prev_txs = from_hex_txs(&prev_txs)?;
         let prev_txs_by_id = txs_by_txid(&prev_txs);
@@ -659,24 +686,7 @@ impl ProveSpellTx for Prover {
             total_sats_out,
             charms_fee
         );
-
-        let client = &self.client;
-        let response = client
-            .post(&self.charms_prove_api_url)
-            .json(&prove_request)
-            .send()
-            .await?;
-        let txs: Vec<String> = response.json().await?;
-        Ok(txs)
-    }
-}
-
-impl Prover {
-    #[cfg(not(feature = "prover"))]
-    fn add_fee(&self, prove_request: ProveRequest) -> ProveRequest {
-        let mut prove_request = prove_request;
-        prove_request.charms_fee = self.charms_fee_settings.clone();
-        prove_request
+        Ok(())
     }
 }
 

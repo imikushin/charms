@@ -18,6 +18,8 @@ use axum::{
 };
 use axum_macros::debug_handler;
 #[cfg(not(feature = "prover"))]
+use charms_client::tx::EnchantedTx;
+#[cfg(not(feature = "prover"))]
 use charms_client::tx::Tx;
 #[cfg(not(feature = "prover"))]
 use charms_data::TxId;

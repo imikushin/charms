@@ -16,7 +16,6 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use axum_macros::debug_handler;
 #[cfg(not(feature = "prover"))]
 use charms_client::tx::EnchantedTx;
 #[cfg(not(feature = "prover"))]
@@ -104,7 +103,7 @@ async fn show_spell_for_tx_hex(
     show_spell(&txid, &payload).map(Json)
 }
 
-#[debug_handler]
+// #[axum_macros::debug_handler]
 #[tracing::instrument(level = "debug", skip_all)]
 async fn prove_spell(
     State(prover): State<Arc<AsyncShared<Prover>>>,

@@ -706,25 +706,13 @@ pub fn get_charms_fee(
 ) -> Amount {
     charms_fee
         .as_ref()
-        .map(|_| {
+        .map(|charms_fee| {
             Amount::from_sat(
-                (total_app_cycles + spell_cycles) * fee_sats_per_megacycle() / 1000000
-                    + fee_sats_base(),
+                (total_app_cycles + spell_cycles) * charms_fee.fee_rate / 1000000
+                    + charms_fee.fee_base,
             )
         })
         .unwrap_or_default()
-}
-
-fn fee_sats_per_megacycle() -> u64 {
-    env::var("CHARMS_FEE_RATE")
-        .map(|s| s.parse::<u64>().unwrap())
-        .unwrap_or(1000)
-}
-
-fn fee_sats_base() -> u64 {
-    env::var("CHARMS_FEE_BASE")
-        .map(|s| s.parse::<u64>().unwrap())
-        .unwrap_or(1000)
 }
 
 pub fn align_spell_to_tx(

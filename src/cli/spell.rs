@@ -131,7 +131,7 @@ impl Check for SpellCli {
             Some(prev_txs) => prev_txs,
             None => match tx {
                 Tx::Bitcoin(tx) => cli::tx::get_prev_txs(&tx.0)?,
-                Tx::Cardano(_) => todo!(),
+                Tx::Cardano(_) => unimplemented!("prev_txs required for Cardano"),
             },
         };
 
@@ -197,7 +197,7 @@ impl Cast for SpellCli {
             Some(prev_txs) => prev_txs,
             None => match chain.as_str() {
                 BITCOIN => gather_prev_txs(&spell)?,
-                CARDANO => todo!(),
+                CARDANO => unimplemented!("not implemented for Cardano"),
                 _ => unimplemented!(),
             },
         };

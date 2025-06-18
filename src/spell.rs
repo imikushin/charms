@@ -27,7 +27,6 @@ use serde_with::{base64::Base64, serde_as, IfIsHumanReadable};
 use sp1_sdk::{SP1ProofMode, SP1Stdin};
 use std::{
     collections::{BTreeMap, BTreeSet},
-    env,
     sync::Arc,
 };
 

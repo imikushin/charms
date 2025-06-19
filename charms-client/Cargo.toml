@@ -14,7 +14,7 @@ cardano-serialization-lib = { workspace = true }
 charms-data = { path = "../charms-data", version = "0.6.0" }
 enum_dispatch = { version = "0.3.13" }
 serde = { workspace = true, features = ["derive"] }
-serde_with = { version = "3.12.0" }
+serde_with = { version = "3.13.0" }
 sha2 = { version = "0.10.8" }
 sp1-primitives = { workspace = true }
 sp1-verifier = { workspace = true }

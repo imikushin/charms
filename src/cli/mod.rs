@@ -407,18 +407,16 @@ fn spell_cli() -> SpellCli {
 }
 
 fn app_sp1_client() -> BoxedSP1Prover {
-    match std::env::var("SP1_PROVER").unwrap_or_default().as_str() {
-        "network" => Box::new(sp1_cpu_client()),
-        "" | "cpu" | "cuda" => sp1_env_client(),
-        _ => unreachable!("Only 'cpu', 'cuda', and 'network' are supported as SP1_PROVER values"),
-    }
+    let name = std::env::var("APP_SP1_PROVER").unwrap_or_default();
+    sp1_named_env_client(name.as_str())
 }
 
 fn spell_sp1_client(app_sp1_client: &Arc<Shared<BoxedSP1Prover>>) -> Arc<Shared<BoxedSP1Prover>> {
-    match std::env::var("SP1_PROVER").unwrap_or_default().as_str() {
-        "" | "cpu" | "cuda" => app_sp1_client.clone(),
-        "network" => Arc::new(Shared::new(sp1_env_client)),
-        _ => unreachable!("Only 'cpu', 'cuda', and 'network' are supported as SP1_PROVER values"),
+    let name = std::env::var("SPELL_SP1_PROVER").unwrap_or_default();
+    match name.as_str() {
+        "app" => app_sp1_client.clone(),
+        "env" | "" => Arc::new(Shared::new(sp1_env_client)),
+        _ => unreachable!("Only 'app' or 'env' are supported as SPELL_SP1_PROVER values"),
     }
 }
 
@@ -435,9 +433,20 @@ pub fn sp1_cpu_client() -> CpuProver {
 
 #[tracing::instrument(level = "debug")]
 fn sp1_env_client() -> BoxedSP1Prover {
-    match std::env::var("SP1_PROVER").unwrap_or_default().as_str() {
+    sp1_named_env_client("env")
+}
+
+#[tracing::instrument(level = "debug")]
+fn sp1_named_env_client(name: &str) -> BoxedSP1Prover {
+    let sp1_prover_env_var = std::env::var("SP1_PROVER").unwrap_or_default();
+    let name = match name {
+        "env" => sp1_prover_env_var.as_str(),
+        _ => name,
+    };
+    match name {
         #[cfg(feature = "prover")]
         "cuda" => Box::new(charms_sp1_cuda_client()),
+        "cpu" => Box::new(sp1_cpu_client()),
         _ => Box::new(ProverClient::from_env()),
     }
 }

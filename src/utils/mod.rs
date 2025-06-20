@@ -4,7 +4,7 @@ use tokio::sync::OnceCell;
 
 pub(crate) mod logger;
 pub mod pool;
-#[cfg(feature = "prover")]
+#[cfg(feature = "none")]
 pub(crate) mod sp1;
 
 pub type BoxedSP1Prover = Box<dyn sp1_sdk::Prover<CpuProverComponents>>;

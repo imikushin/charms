@@ -67,7 +67,7 @@ resolver = "2"
 [workspace.dependencies]
 anyhow = { version = "1.0.98" }
 bitcoin = { version = "0.32.6" }
-cardano-serialization-lib = { git = "https://github.com/imikushin/cardano-serialization-lib", branch = "update-wasm-bindgen" }
+cardano-serialization-lib = { version = "14.1.2", git = "https://github.com/imikushin/cardano-serialization-lib", branch = "update-wasm-bindgen" }
 ciborium = { version = "0.2.2" }
 ciborium-io = { version = "0.2.2" }
 hex = { version = "0.4.3" }

@@ -67,7 +67,7 @@ resolver = "2"
 [workspace.dependencies]
 anyhow = { version = "1.0.98" }
 bitcoin = { version = "0.32.6" }
-cardano-serialization-lib = { version = "14.1.2" }
+cardano-serialization-lib = { git = "https://github.com/imikushin/cardano-serialization-lib", branch = "update-wasm-bindgen" }
 ciborium = { version = "0.2.2" }
 ciborium-io = { version = "0.2.2" }
 hex = { version = "0.4.3" }
@@ -97,6 +97,5 @@ opt-level = 3
 strip = "debuginfo"
 
 [patch.crates-io]
-cardano-serialization-lib = { git = "https://github.com/imikushin/cardano-serialization-lib", branch = "update-wasm-bindgen" }
 secp256k1 = { git = "https://github.com/sp1-patches/rust-secp256k1", tag = "patch-0.29.1-sp1-5.0.0" }
 sha2 = { git = "https://github.com/sp1-patches/RustCrypto-hashes", package = "sha2", tag = "patch-sha2-0.10.8-sp1-4.0.0" }

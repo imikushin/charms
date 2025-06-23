@@ -347,12 +347,44 @@ fn app_inputs(
 }
 
 pub trait Prove {
-    /// Prove a spell (provided as [`NormalizedSpell`]).
-    /// Returns the normalized spell and the proof (which is a Groth16 proof of checking if the
-    /// spell is correct inside a zkVM).
+    /// Prove the correctness of a spell, generate the proof.
     ///
-    /// Requires the binaries of the apps used in the spell, the private inputs to the apps, and the
-    /// pre-requisite transactions (`prev_txs`).
+    /// This function generates a proof that a spell (`NormalizedSpell`) is correct.
+    /// It processes application binaries, private inputs,
+    /// previous transactions, and input/output mappings, and finally generates a proof
+    /// of correctness for the given spell. Additionally, it calculates the
+    /// cycles consumed during the process if applicable.
+    ///
+    /// # Parameters
+    /// - `norm_spell`: A `NormalizedSpell` object representing the normalized spell that needs to
+    ///   be proven.
+    /// - `app_binaries`: A map containing application VKs (`B32`) as keys and their binaries as
+    ///   values.
+    /// - `app_private_inputs`: A map of application-specific private inputs, containing `App` keys
+    ///   and associated `Data` values.
+    /// - `prev_txs`: A list of previous transactions (`Tx`) that have created the outputs consumed
+    ///   by the spell.
+    /// - `tx_ins_beamed_source_utxos`: A mapping of input UTXOs to their beaming source UTXOs (if
+    ///   the input UTXO has been beamed from another chain).
+    /// - `expected_cycles`: An optional vector of cycles (`u64`) that represents the desired
+    ///   execution cycles or constraints for the proof. If `None`, no specific cycle limit is
+    ///   applied.
+    ///
+    /// # Returns
+    /// - `Ok((NormalizedSpell, Proof, u64))`: On success, returns a tuple containing:
+    ///   * The original `NormalizedSpell` object that was proven.
+    ///   * The generated `Proof` object, which provides evidence of correctness for the spell.
+    ///   * A `u64` value indicating the number of cycles consumed during the proving process.
+    /// - `Err(anyhow::Error)`: Returns an error if the proving process fails due to validation
+    ///   issues, computation errors, or other runtime problems.
+    ///
+    /// # Errors
+    /// The function will return an error if:
+    /// - Validation of the `NormalizedSpell` or its components fails.
+    /// - The proof generation process encounters computation errors.
+    /// - Any of the dependent data (e.g., transactions, binaries, private inputs) is inconsistent,
+    ///   invalid, or missing required information.
+    /// ```
     fn prove(
         &self,
         norm_spell: NormalizedSpell,

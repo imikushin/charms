@@ -21,16 +21,26 @@ use charms_client::{bitcoin_tx::BitcoinTx, tx::Tx};
 use charms_data::{TxId, UtxoId};
 use std::{collections::BTreeMap, str::FromStr};
 
-/// `add_spell` adds `spell` to `tx`:
-/// 1. it builds `commit_tx` transaction which creates a *committed spell* Tapscript output
-/// 2. then appends an input spending the *committed spell* to `tx`, and adds a witness for it.
+/// Adds spell data to a Bitcoin transaction by creating a committed spell output and spending it.
 ///
-/// `fee_rate` is used to compute the amount of sats necessary to fund the commit and spell
-/// transactions.
+/// # Arguments
+/// * `tx` - Base (unsigned) transaction to add the spell data to
+/// * `spell_data` - Raw byte data of the spell to commit
+/// * `funding_out_point` - UTXO to fund both the commit and spell transactions
+/// * `funding_output_value` - Value of the funding UTXO in sats
+/// * `change_pubkey` - Script pubkey for change output to be added to spell_tx
+/// * `fee_rate` - Fee rate to calculate transaction fees
+/// * `prev_txs` - Map of previous transactions referenced by the spell
+/// * `charms_fee_pubkey` - Optional script pubkey for charms fee output
+/// * `charms_fee` - Amount of charms fee to pay
 ///
-/// Return `[commit_tx, tx]`.
+/// # Returns
+/// Returns a vector containing two transactions:
+/// 1. `commit_tx` - Transaction that creates the committed spell Tapscript output
+/// 2. `spell_tx` - Modified input `tx` with added spell input (with witness data) and change
+///    output.
 ///
-/// Both `commit_tx` and `tx` need to be signed.
+/// Both transactions need to be signed before broadcasting.
 pub fn add_spell(
     tx: Transaction,
     spell_data: &[u8],

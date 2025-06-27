@@ -10,7 +10,7 @@ license.workspace = true
 [dependencies]
 anyhow = { workspace = true }
 bitcoin = { workspace = true, features = ["serde"] }
-charms-data = { path = "../charms-data", version = "0.6.2" }
+charms-data = { path = "../charms-data", version = "0.7.0" }
 cml-chain = { workspace = true }
 enum_dispatch = { version = "0.3.13" }
 hex = { workspace = true }

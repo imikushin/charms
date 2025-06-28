@@ -388,7 +388,7 @@ pub trait Prove {
     fn prove(
         &self,
         norm_spell: NormalizedSpell,
-        app_binaries: &BTreeMap<B32, Vec<u8>>,
+        app_binaries: BTreeMap<B32, Vec<u8>>,
         app_private_inputs: BTreeMap<App, Data>,
         prev_txs: Vec<Tx>,
         tx_ins_beamed_source_utxos: BTreeMap<UtxoId, UtxoId>,
@@ -399,7 +399,7 @@ impl Prove for Prover {
     fn prove(
         &self,
         norm_spell: NormalizedSpell,
-        app_binaries: &BTreeMap<B32, Vec<u8>>,
+        app_binaries: BTreeMap<B32, Vec<u8>>,
         app_private_inputs: BTreeMap<App, Data>,
         prev_txs: Vec<Tx>,
         tx_ins_beamed_source_utxos: BTreeMap<UtxoId, UtxoId>,
@@ -409,38 +409,32 @@ impl Prove for Prover {
         let prev_spells = charms_client::prev_spells(&prev_txs, SPELL_VK);
         let tx = to_tx(&norm_spell, &prev_spells, &tx_ins_beamed_source_utxos);
 
-        let app_contract_proofs = norm_spell
-            .app_public_inputs
-            .iter()
-            .zip(0usize..)
-            .filter_map(|((app, _), i)| app_binaries.get(&app.vk).map(|_| i))
-            .collect();
+        let app_prover_output = self.app_prover.prove(
+            app_binaries,
+            tx,
+            norm_spell.app_public_inputs.clone(),
+            app_private_inputs,
+            &mut stdin,
+        )?;
+
+        let app_cycles = app_prover_output
+            .as_ref()
+            .map(|o| o.cycles.iter().sum())
+            .unwrap_or(0);
+
         let prover_input = SpellProverInput {
             self_spell_vk: SPELL_VK.to_string(),
             prev_txs,
             spell: norm_spell.clone(),
             tx_ins_beamed_source_utxos,
-            app_contract_proofs,
+            app_prover_output,
         };
-        let input_vec: Vec<u8> = util::write(&prover_input)?;
 
-        dbg!(input_vec.len());
+        stdin.write_vec(util::write(&prover_input)?);
 
-        stdin.write_vec(input_vec);
-
-        let app_public_inputs = &norm_spell.app_public_inputs;
-
-        let app_cycles = self.app_prover.prove(
-            app_binaries,
-            tx,
-            app_public_inputs,
-            app_private_inputs,
-            &mut stdin,
-        )?;
-
-        let (pk, _) = self.sp1_client.get().setup(SPELL_CHECKER_BINARY);
+        let (pk, _) = self.prover_client.get().setup(SPELL_CHECKER_BINARY);
         let (proof, spell_cycles) =
-            self.sp1_client
+            self.prover_client
                 .get()
                 .prove(&pk, &stdin, SP1ProofMode::Groth16)?;
         let proof = proof.bytes().into_boxed_slice();
@@ -448,6 +442,7 @@ impl Prove for Prover {
         let mut norm_spell2 = norm_spell;
         norm_spell2.tx.ins = None;
 
+        // TODO app_cycles might turn out to be much more expensive than spell_cycles
         Ok((norm_spell2, proof, app_cycles + spell_cycles))
     }
 }
@@ -509,7 +504,7 @@ pub struct ProveRequest {
 
 pub struct Prover {
     pub app_prover: Arc<app::Prover>,
-    pub sp1_client: Arc<Shared<BoxedSP1Prover>>,
+    pub prover_client: Arc<Shared<BoxedSP1Prover>>,
     pub charms_fee_settings: Option<CharmsFee>,
     pub charms_prove_api_url: String,
     #[cfg(not(feature = "prover"))]
@@ -548,7 +543,7 @@ impl ProveSpellTx for Prover {
 
         let (norm_spell, proof, total_cycles) = self.prove(
             norm_spell,
-            &binaries,
+            binaries,
             app_private_inputs,
             prev_txs,
             tx_ins_beamed_source_utxos,

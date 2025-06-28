@@ -7,6 +7,7 @@ use crate::{
     SPELL_VK,
 };
 use anyhow::{ensure, Result};
+use charms_app_runner::AppRunner;
 use charms_client::{tx::Tx, CURRENT_VERSION};
 use charms_data::UtxoId;
 use serde_json::json;
@@ -23,6 +24,7 @@ pub trait Prove {
 pub struct SpellCli {
     pub app_prover: Arc<app::Prover>,
     pub spell_prover: Arc<spell::Prover>,
+    pub app_runner: AppRunner,
 }
 
 impl SpellCli {
@@ -57,7 +59,7 @@ impl Prove for SpellCli {
 
         let spell: Spell = serde_yaml::from_slice(&std::fs::read(spell)?)?;
 
-        let binaries = cli::app::binaries_by_vk(&self.app_prover, app_bins)?;
+        let binaries = cli::app::binaries_by_vk(&self.app_runner, app_bins)?;
 
         let transactions = self
             .spell_prover
@@ -152,16 +154,17 @@ impl Check for SpellCli {
             "spell is not well-formed"
         );
 
-        let binaries = cli::app::binaries_by_vk(&self.app_prover, app_bins)?;
+        let binaries = cli::app::binaries_by_vk(&self.app_runner, app_bins)?;
 
         let charms_tx = spell.to_tx()?;
-        self.app_prover.run_all(
+        let cycles_spent = self.app_runner.run_all(
             &binaries,
             &charms_tx,
             &norm_spell.app_public_inputs,
             &app_private_inputs,
-            None,
         )?;
+
+        eprintln!("cycles spent: {:?}", cycles_spent);
 
         Ok(())
     }

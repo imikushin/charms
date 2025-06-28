@@ -8,6 +8,10 @@ pub mod bitcoin_tx;
 pub mod cardano_tx;
 pub mod tx;
 
+pub const APP_VK: [u32; 8] = [
+    1428460005, 543013383, 891077755, 1093230882, 45382488, 1416737865, 767648064, 308407145,
+];
+
 /// Verification key for version `0` of the protocol implemented by `charms-spell-checker` binary.
 pub const V0_SPELL_VK: &str = "0x00e9398ac819e6dd281f81db3ada3fe5159c3cc40222b5ddb0e7584ed2327c5d";
 /// Verification key for version `1` of the protocol implemented by `charms-spell-checker` binary.
@@ -16,6 +20,8 @@ pub const V1_SPELL_VK: &str = "0x009f38f590ebca4c08c1e97b4064f39e4cd336eea406966
 pub const V2_SPELL_VK: &str = "0x00bd312b6026dbe4a2c16da1e8118d4fea31587a4b572b63155252d2daf69280";
 /// Verification key for version `3` of the protocol implemented by `charms-spell-checker` binary.
 pub const V3_SPELL_VK: &str = "0x0034872b5af38c95fe82fada696b09a448f7ab0928273b7ac8c58ba29db774b9";
+/// Verification key for version `4` of the protocol implemented by `charms-spell-checker` binary.
+pub const V4_SPELL_VK: &str = "0x00c707a155bf8dc18dc41db2994c214e93e906a3e97b4581db4345b3edd837c5";
 
 /// Version `0` of the protocol.
 pub const V0: u32 = 0u32;
@@ -27,9 +33,11 @@ pub const V2: u32 = 2u32;
 pub const V3: u32 = 3u32;
 /// Version `4` of the protocol.
 pub const V4: u32 = 4u32;
+/// Version `5` of the protocol.
+pub const V5: u32 = 5u32;
 
 /// Current version of the protocol.
-pub const CURRENT_VERSION: u32 = V4;
+pub const CURRENT_VERSION: u32 = V5;
 
 /// Maps the index of the charm's app (in [`NormalizedSpell`].`app_public_inputs`) to the charm's
 /// data.
@@ -253,7 +261,22 @@ pub struct SpellProverInput {
     pub spell: NormalizedSpell,
     pub tx_ins_beamed_source_utxos: BTreeMap<UtxoId, UtxoId>,
     /// indices of apps in the spell that have contract proofs
-    pub app_contract_proofs: BTreeSet<usize>, // proofs are provided in input stream data
+    pub app_prover_output: Option<AppProverOutput>, // proof is provided in input stream data
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AppProverInput {
+    pub app_binaries: BTreeMap<B32, Vec<u8>>,
+    pub tx: Transaction,
+    pub app_public_inputs: BTreeMap<App, Data>,
+    pub app_private_inputs: BTreeMap<App, Data>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AppProverOutput {
+    pub tx: Transaction,
+    pub app_public_inputs: BTreeMap<App, Data>,
+    pub cycles: Vec<u64>,
 }
 
 #[cfg(test)]

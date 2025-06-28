@@ -17,6 +17,7 @@ use crate::{
     utils::{BoxedSP1Prover, Shared},
 };
 use bitcoin::{address::NetworkUnchecked, Address};
+use charms_app_runner::AppRunner;
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use clap_complete::{generate, Shell};
 #[cfg(not(feature = "prover"))]
@@ -324,6 +325,7 @@ fn server(server_config: ServerConfig) -> Server {
 fn spell_prover() -> Prover {
     let app_prover = Arc::new(app::Prover {
         sp1_client: Arc::new(Shared::new(app_sp1_client)),
+        runner: AppRunner::new(),
     });
 
     let spell_sp1_client = spell_sp1_client(&app_prover.sp1_client);
@@ -345,7 +347,7 @@ fn spell_prover() -> Prover {
 
     let spell_prover = Prover {
         app_prover: app_prover.clone(),
-        sp1_client: spell_sp1_client.clone(),
+        prover_client: spell_sp1_client.clone(),
         charms_fee_settings,
         charms_prove_api_url,
         #[cfg(not(feature = "prover"))]
@@ -398,6 +400,7 @@ fn spell_cli() -> SpellCli {
     let spell_cli = SpellCli {
         app_prover: spell_prover.app_prover.clone(),
         spell_prover: Arc::new(spell_prover),
+        app_runner: AppRunner::new(),
     };
     spell_cli
 }

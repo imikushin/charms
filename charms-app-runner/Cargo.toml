@@ -1,0 +1,14 @@
+[package]
+name = "charms-app-runner"
+description = "Charms app runner"
+
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+charms-data = { path = "../charms-data", version = "0.7.0" }
+sha2 = { workspace = true }
+wasmi = { version = "0.47.0", default-features = false, features = ["std", "prefer-btree-collections"] }

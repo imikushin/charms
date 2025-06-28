@@ -1,9 +1,10 @@
 pub(crate) use crate::{app, app::Prover, spell::Spell};
 use anyhow::{anyhow, ensure, Result};
 use charms_data::{Data, B32};
+use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
-    env, fs, io,
+    fs, io,
     path::PathBuf,
     process::{Command, Stdio},
 };
@@ -34,45 +35,26 @@ pub fn new(name: &str) -> Result<()> {
 }
 
 fn do_build() -> Result<String> {
-    if !Command::new("which")
-        .args(&["cargo-prove"])
-        .env(
-            "PATH",
-            format!("{}:{}/.sp1/bin", env::var("PATH")?, env::var("HOME")?),
-        )
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()?
-        .success()
-    {
-        Command::new("bash")
-            .args(&["-c", "curl -L https://sp1.succinct.xyz | bash"])
-            .stdout(Stdio::null())
-            .status()?;
-        Command::new(format!("{}/.sp1/bin/sp1up", env::var("HOME")?))
-            .args(&["-v", "4.0.1"])
-            .stdout(Stdio::null())
-            .status()?;
-    }
     let mut child = Command::new("cargo")
-        .env(
-            "PATH",
-            format!("{}:{}/.sp1/bin", env::var("PATH")?, env::var("HOME")?),
-        )
-        .args(&[
-            "prove",
-            "build",
-            "--locked",
-            "--output-directory=./target",
-            "--elf-name=charms-app",
-        ])
+        .args(&["build", "--locked", "--release", "--target=wasm32-wasip1"])
         .stdout(Stdio::piped())
         .spawn()?;
     let stdout = child.stdout.take().expect("Failed to open stdout");
     io::copy(&mut io::BufReader::new(stdout), &mut io::stderr())?;
     let status = child.wait()?;
     ensure!(status.success());
-    Ok("./target/charms-app".to_string())
+    Ok(wasm_path()?)
+}
+
+fn wasm_path() -> Result<String> {
+    let cargo_toml_contents = fs::read_to_string("./Cargo.toml")?;
+    let toml_value: toml::Value = cargo_toml_contents.parse()?;
+    toml_value
+        .get("package")
+        .and_then(|package| package.get("name"))
+        .and_then(|name| name.as_str())
+        .and_then(|name| Some(format!("./target/wasm32-wasip1/release/{}.wasm", name)))
+        .ok_or_else(|| anyhow!("Cargo.toml should set a package name"))
 }
 
 pub fn build() -> Result<()> {
@@ -89,10 +71,10 @@ pub fn vk(path: Option<PathBuf>) -> Result<()> {
             fs::read(bin_path)?
         }
     };
-    let prover = app::Prover::new();
-    let vk: [u8; 32] = prover.vk(&binary);
+    let hash = Sha256::digest(binary);
+    let vk = B32(hash.into());
 
-    println!("{}", hex::encode(&vk));
+    println!("{}", vk);
     Ok(())
 }
 

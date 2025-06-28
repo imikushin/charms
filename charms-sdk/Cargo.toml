@@ -9,4 +9,3 @@ license.workspace = true
 
 [dependencies]
 charms-data = { path = "../charms-data", version = "0.7.0" }
-sp1-zkvm = { workspace = true }

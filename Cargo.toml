@@ -46,6 +46,8 @@ tracing = { workspace = true }
 tracing-forest = { version = "0.1.6" }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 twirp = { package = "twirp-rs", version = "0.13.0-succinct" }
+wasmi = { version = "0.47.0", default-features = false, features = ["std", "prefer-btree-collections"] }
+wasmi_wasi = { version = "0.47.0" }
 
 [features]
 prover = ["sp1-sdk/native-gnark", "sp1-prover/native-gnark"]

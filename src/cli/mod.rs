@@ -28,6 +28,7 @@ use sp1_sdk::{install::try_install_circuit_artifacts, CpuProver, ProverClient};
 use spell::Cast;
 use std::{io, net::IpAddr, path::PathBuf, str::FromStr, sync::Arc};
 use utils::AsyncShared;
+use wasmi::Engine;
 
 pub const BITCOIN: &str = "bitcoin";
 pub const CARDANO: &str = "cardano";
@@ -330,6 +331,7 @@ fn server(server_config: ServerConfig) -> Server {
 fn spell_prover() -> Prover {
     let app_prover = Arc::new(app::Prover {
         sp1_client: Arc::new(Shared::new(app_sp1_client)),
+        engine: Engine::default(),
     });
 
     let spell_sp1_client = spell_sp1_client(&app_prover.sp1_client);

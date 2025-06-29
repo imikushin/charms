@@ -13,10 +13,7 @@ sha2 = { version = "0.10.8" }
 [profile.release]
 lto = "fat"
 opt-level = "s"
-strip = "symbols"
+#strip = "symbols"
 
 # Empty `[workspace]` section to make this a "top-level" project
 [workspace]
-
-[patch.crates-io]
-sha2 = { git = "https://github.com/sp1-patches/RustCrypto-hashes", package = "sha2", tag = "patch-sha2-0.10.8-sp1-4.0.0" }

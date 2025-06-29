@@ -1,26 +1,34 @@
-use crate::utils::{BoxedSP1Prover, Shared};
+use crate::{
+    cli::app::new,
+    utils::{BoxedSP1Prover, Shared},
+};
 use anyhow::ensure;
 use charms_data::{is_simple_transfer, util, App, Data, Transaction, B32};
+use sha2::{Digest, Sha256};
 use sp1_sdk::{
     HashableKey, ProverClient, SP1Context, SP1Proof, SP1ProofMode, SP1Stdin, SP1VerifyingKey,
 };
-use std::{collections::BTreeMap, mem, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    os::fd::{AsFd, AsRawFd},
+    sync::Arc,
+};
+use wasmi::{Engine, Linker, Module, Store};
+use wasmi_wasi::{
+    add_to_linker,
+    wasi_common::pipe::{ReadPipe, WritePipe},
+    WasiCtx, WasiCtxBuilder,
+};
 
 pub struct Prover {
     pub sp1_client: Arc<Shared<BoxedSP1Prover>>,
+    pub engine: Engine,
 }
 
 impl Prover {
-    pub fn vk(&self, binary: &[u8]) -> [u8; 32] {
-        let (_, _, _, vk) = self.sp1_client.get().inner().setup(&binary);
-        app_vk(vk)
-    }
-}
-
-fn app_vk(sp1_vk: SP1VerifyingKey) -> [u8; 32] {
-    unsafe {
-        let vk: [u32; 8] = sp1_vk.hash_u32();
-        mem::transmute(vk)
+    pub fn vk(&self, binary: &[u8]) -> B32 {
+        let hash = Sha256::digest(binary);
+        B32(hash.into())
     }
 }
 
@@ -30,6 +38,7 @@ impl Prover {
             sp1_client: Arc::new(Shared::new(|| {
                 Box::new(ProverClient::builder().cpu().build())
             })),
+            engine: Engine::default(),
         }
     }
 
@@ -149,6 +158,7 @@ impl Prover {
         Ok(app_cycles)
     }
 
+    #[tracing::instrument(level = "info", skip(self, app_binary, tx, x, w))]
     pub fn run(
         &self,
         app_binary: &[u8],
@@ -157,17 +167,29 @@ impl Prover {
         x: &Data,
         w: &Data,
     ) -> anyhow::Result<()> {
-        let (_pk, vk) = self.sp1_client.get().setup(app_binary);
-        ensure!(app.vk == B32(app_vk(vk)), "app.vk mismatch");
+        let vk = self.vk(app_binary);
+        ensure!(app.vk == vk, "app.vk mismatch");
 
-        let mut app_stdin = SP1Stdin::new();
-        app_stdin.write_vec(util::write(&(app, tx, x, w))?);
-        let (committed_values, _report) = self.sp1_client.get().execute(app_binary, &app_stdin)?;
-        let com: (App, Transaction, Data) = util::read(committed_values.to_vec().as_slice())?;
-        ensure!(
-            (&com.0, &com.1, &com.2) == (app, tx, x),
-            "committed data mismatch"
-        );
+        let mut linker = Linker::new(&self.engine);
+        add_to_linker(&mut linker, |ctx| ctx)?;
+
+        let stdin = ReadPipe::from(util::write(&(app, tx, x, w))?);
+
+        let wasi_ctx = WasiCtxBuilder::new()
+            .stdin(Box::new(stdin))
+            .inherit_stderr()
+            .build();
+        let mut store = Store::new(&self.engine, wasi_ctx);
+
+        let module = Module::new(&self.engine, app_binary)?;
+
+        let instance = linker.instantiate(&mut store, &module)?.start(&mut store)?;
+
+        let Some(main_func) = instance.get_func(&store, "_start") else {
+            unreachable!("we should have a main function")
+        };
+        main_func.typed::<(), ()>(&store)?.call(&mut store, ())?;
+
         Ok(())
     }
 }

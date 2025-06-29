@@ -36,6 +36,7 @@ pub fn new(name: &str) -> Result<()> {
 
 fn do_build() -> Result<String> {
     let mut child = Command::new("cargo")
+        .env("RUSTFLAGS", "-C target-cpu=generic")
         .args(&["build", "--locked", "--release", "--target=wasm32-wasip1"])
         .stdout(Stdio::piped())
         .spawn()?;

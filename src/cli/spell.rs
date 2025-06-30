@@ -154,12 +154,14 @@ impl Check for SpellCli {
         let binaries = cli::app::binaries_by_vk(&self.app_runner, app_bins)?;
 
         let charms_tx = spell.to_tx()?;
-        self.app_runner.run_all(
+        let cycles_spent = self.app_runner.run_all(
             &binaries,
             &charms_tx,
             &norm_spell.app_public_inputs,
             &app_private_inputs,
         )?;
+
+        eprintln!("cycles spent: {:?}", cycles_spent);
 
         Ok(())
     }

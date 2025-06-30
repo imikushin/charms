@@ -23,11 +23,12 @@ fn run(input: AppProverInput) -> AppProverOutput {
         app_public_inputs,
         app_private_inputs,
     } = input;
-    app_runner
+    let cycles = app_runner
         .run_all(&app_binaries, &tx, &app_public_inputs, &app_private_inputs)
         .expect("all apps should run successfully");
     AppProverOutput {
         tx,
         app_public_inputs,
+        cycles,
     }
 }

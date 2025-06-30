@@ -6,7 +6,7 @@ use std::{
     io::Write,
     sync::{Arc, Mutex},
 };
-use wasmi::{Caller, Engine, Extern, Linker, Memory, Module, Store};
+use wasmi::{Caller, Config, Engine, Extern, Linker, Memory, Module, Store};
 
 #[derive(Clone)]
 pub struct AppRunner {
@@ -182,10 +182,14 @@ fn fd_read(caller: Caller<'_, HostState>, fd: i32, iovs: i32, iovs_len: i32, nre
     })
 }
 
+const MAX_FUEL_PER_RUN: u64 = 1000000000;
+
 impl AppRunner {
     pub fn new() -> Self {
+        let mut config = Config::default();
+        config.consume_fuel(true);
         Self {
-            engine: Engine::default(),
+            engine: Engine::new(&config),
         }
     }
 
@@ -201,7 +205,7 @@ impl AppRunner {
         tx: &Transaction,
         x: &Data,
         w: &Data,
-    ) -> Result<()> {
+    ) -> Result<u64> {
         let vk = self.vk(app_binary);
         ensure!(app.vk == vk, "app.vk mismatch");
 
@@ -213,6 +217,7 @@ impl AppRunner {
         };
 
         let mut store = Store::new(&self.engine, state.clone());
+        store.set_fuel(MAX_FUEL_PER_RUN)?;
         let mut linker = Linker::new(&self.engine);
 
         linker.func_wrap("wasi_snapshot_preview1", "fd_write", fd_write)?;
@@ -246,7 +251,9 @@ impl AppRunner {
         std::io::stderr().write_all(&stderr)?;
 
         result?;
-        Ok(())
+
+        let fuel_spent = MAX_FUEL_PER_RUN - store.get_fuel()?;
+        Ok(fuel_spent)
     }
 
     pub fn run_all(
@@ -263,9 +270,9 @@ impl AppRunner {
                 let w = app_private_inputs.get(app).unwrap_or(&empty);
                 match app_binaries.get(&app.vk) {
                     Some(app_binary) => {
-                        self.run(app_binary, app, tx, x, w)?;
+                        let fuel_spent = self.run(app_binary, app, tx, x, w)?;
                         eprintln!("✅  app contract satisfied: {}", app);
-                        Ok(0)
+                        Ok(fuel_spent)
                     }
                     None => {
                         ensure!(is_simple_transfer(app, tx));

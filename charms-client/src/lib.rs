@@ -273,6 +273,7 @@ pub struct AppProverInput {
 pub struct AppProverOutput {
     pub tx: Transaction,
     pub app_public_inputs: BTreeMap<App, Data>,
+    pub cycles: Vec<u64>,
 }
 
 #[cfg(test)]

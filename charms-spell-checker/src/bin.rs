@@ -23,6 +23,7 @@ pub(crate) fn run(input: SpellProverInput) -> (String, NormalizedSpell) {
         spell,
         tx_ins_beamed_source_utxos,
         app_contract_proofs,
+        app_private_inputs,
     } = input;
 
     let app_contract_proofs = spell

@@ -1,6 +1,4 @@
-use charms_sdk::data::{
-    app_datas, check, App, Data, Transaction, UtxoId, B32, NFT,
-};
+use charms_sdk::data::{app_datas, check, App, Data, Transaction, UtxoId, B32, NFT};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 

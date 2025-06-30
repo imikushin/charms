@@ -15,6 +15,7 @@ use crate::{
     utils::{BoxedSP1Prover, Shared},
 };
 use bitcoin::{address::NetworkUnchecked, Address};
+use charms_app_runner::AppRunner;
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use clap_complete::{generate, Shell};
 #[cfg(not(feature = "prover"))]
@@ -28,7 +29,6 @@ use sp1_sdk::{install::try_install_circuit_artifacts, CpuProver, ProverClient};
 use spell::Cast;
 use std::{io, net::IpAddr, path::PathBuf, str::FromStr, sync::Arc};
 use utils::AsyncShared;
-use wasmi::Engine;
 
 pub const BITCOIN: &str = "bitcoin";
 pub const CARDANO: &str = "cardano";
@@ -331,7 +331,7 @@ fn server(server_config: ServerConfig) -> Server {
 fn spell_prover() -> Prover {
     let app_prover = Arc::new(app::Prover {
         sp1_client: Arc::new(Shared::new(app_sp1_client)),
-        engine: Engine::default(),
+        runner: AppRunner::new(),
     });
 
     let spell_sp1_client = spell_sp1_client(&app_prover.sp1_client);
@@ -406,6 +406,7 @@ fn spell_cli() -> SpellCli {
     let spell_cli = SpellCli {
         app_prover: spell_prover.app_prover.clone(),
         spell_prover: Arc::new(spell_prover),
+        app_runner: AppRunner::new(),
     };
     spell_cli
 }

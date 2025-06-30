@@ -417,40 +417,23 @@ impl Prove for Prover {
             .zip(0usize..)
             .filter_map(|((app, _), i)| app_binaries.get(&app.vk).map(|_| i))
             .collect();
+        let app_private_inputs = app_private_inputs
+            .iter()
+            .map(|(_, data)| data.clone())
+            .collect();
         let prover_input = SpellProverInput {
             self_spell_vk: SPELL_VK.to_string(),
             prev_txs,
             spell: norm_spell.clone(),
             tx_ins_beamed_source_utxos,
             app_contract_proofs,
+            app_private_inputs,
         };
         let input_vec: Vec<u8> = util::write(&prover_input)?;
 
         dbg!(input_vec.len());
 
         stdin.write_vec(input_vec);
-
-        let app_public_inputs = &norm_spell.app_public_inputs;
-
-        // TODO add a way to pass the expected cycles to the prover, remove this
-        // verify that apps execute within expected cycles
-        // if expected_cycles.is_some() {
-        //     self.app_prover.run_all(
-        //         app_binaries,
-        //         &tx,
-        //         app_public_inputs,
-        //         &app_private_inputs,
-        //         expected_cycles,
-        //     )?;
-        // }
-
-        self.app_prover.prove(
-            app_binaries,
-            tx,
-            app_public_inputs,
-            app_private_inputs,
-            &mut stdin,
-        )?;
 
         let (pk, _) = self.sp1_client.get().setup(SPELL_CHECKER_BINARY);
         // TODO find a way to get cycles count from the prover, remove this
@@ -569,14 +552,7 @@ impl ProveSpellTx for Prover {
         let prev_spells = charms_client::prev_spells(&prev_txs, SPELL_VK);
         let charms_tx = to_tx(&norm_spell, &prev_spells, &tx_ins_beamed_source_utxos);
 
-        let expected_cycles = self.app_prover.run_all(
-            &binaries,
-            &charms_tx,
-            &norm_spell.app_public_inputs,
-            &app_private_inputs,
-            None,
-        )?;
-        let total_app_cycles: u64 = expected_cycles.iter().sum();
+        let total_app_cycles: u64 = 0; // TODO get actual number of total app cycles
 
         let (norm_spell, proof, spell_cycles) = self.prove(
             norm_spell,
@@ -584,7 +560,7 @@ impl ProveSpellTx for Prover {
             app_private_inputs,
             prev_txs,
             tx_ins_beamed_source_utxos,
-            Some(expected_cycles),
+            None, // TODO pass actual vector of expected app cycles
         )?;
 
         tracing::info!(
@@ -674,12 +650,11 @@ impl Prover {
         let prev_spells = charms_client::prev_spells(&prev_txs, SPELL_VK);
         let charms_tx = to_tx(&norm_spell, &prev_spells, &tx_ins_beamed_source_utxos);
 
-        let expected_cycles = self.app_prover.run_all(
+        let expected_cycles = self.app_prover.runner.run_all(
             &prove_request.binaries,
             &charms_tx,
             &norm_spell.app_public_inputs,
             &app_private_inputs,
-            None,
         )?;
         let total_app_cycles: u64 = expected_cycles.iter().sum();
 

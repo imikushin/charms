@@ -909,6 +909,7 @@ dependencies = [
  "bincode",
  "bitcoin",
  "bitcoincore-rpc",
+ "charms-app-runner",
  "charms-client",
  "charms-data",
  "clap",
@@ -938,6 +939,28 @@ dependencies = [
  "twirp-rs",
  "wasmi",
  "wasmi_wasi",
+]
+
+[[package]]
+name = "charms-app-checker"
+version = "0.7.0"
+dependencies = [
+ "charms-app-runner",
+ "charms-client",
+ "charms-data",
+ "serde",
+ "sp1-primitives",
+ "sp1-zkvm",
+]
+
+[[package]]
+name = "charms-app-runner"
+version = "0.7.0"
+dependencies = [
+ "anyhow",
+ "charms-data",
+ "sha2 0.10.8",
+ "wasmi",
 ]
 
 [[package]]
@@ -6251,8 +6274,6 @@ dependencies = [
 [[package]]
 name = "wasmi"
 version = "0.47.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c63b9ec4d4ba7754a81c6143967a878586d60431970a6dd1ae1b51fe4f4cc28b"
 dependencies = [
  "arrayvec",
  "multi-stash",
@@ -6267,8 +6288,6 @@ dependencies = [
 [[package]]
 name = "wasmi_collections"
 version = "0.47.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09b94ec9c51b94bcfaa8485aaea400fc38c082d4fab7acbabd02b5d90cd8fe44"
 dependencies = [
  "string-interner",
 ]
@@ -6276,8 +6295,6 @@ dependencies = [
 [[package]]
 name = "wasmi_core"
 version = "0.47.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34c89630ed2abff8a4d4c067b0d177f4c2b7ceecdb22512001f9075f804f15e7"
 dependencies = [
  "libm",
 ]
@@ -6285,8 +6302,6 @@ dependencies = [
 [[package]]
 name = "wasmi_ir"
 version = "0.47.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "970d16ec098d3ce6127ead10986ab4e6f4063a950b4b2968cd360b35340e7675"
 dependencies = [
  "wasmi_core",
 ]
@@ -6294,8 +6309,6 @@ dependencies = [
 [[package]]
 name = "wasmi_wasi"
 version = "0.47.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "29fc4bcc9ec0c3accb1554d10bff8f51f63d566c18f2bd25d909355f3050a0bc"
 dependencies = [
  "wasi-common",
  "wasmi",

@@ -11,6 +11,7 @@ use crate::{
 };
 use anyhow::{ensure, Error, Result};
 use bitcoin::consensus::encode::deserialize_hex;
+use charms_app_runner::AppRunner;
 use charms_client::tx::Tx;
 use charms_data::UtxoId;
 use serde_json::json;
@@ -31,6 +32,7 @@ pub trait Cast {
 pub struct SpellCli {
     pub app_prover: Arc<app::Prover>,
     pub spell_prover: Arc<spell::Prover>,
+    pub app_runner: AppRunner,
 }
 
 impl Prove for SpellCli {
@@ -54,7 +56,7 @@ impl Prove for SpellCli {
 
         let spell: Spell = serde_yaml::from_slice(&std::fs::read(spell)?)?;
 
-        let binaries = cli::app::binaries_by_vk(&self.app_prover, app_bins)?;
+        let binaries = cli::app::binaries_by_vk(&self.app_runner, app_bins)?;
 
         let transactions = self
             .spell_prover
@@ -149,15 +151,14 @@ impl Check for SpellCli {
             "spell is not well-formed"
         );
 
-        let binaries = cli::app::binaries_by_vk(&self.app_prover, app_bins)?;
+        let binaries = cli::app::binaries_by_vk(&self.app_runner, app_bins)?;
 
         let charms_tx = spell.to_tx()?;
-        self.app_prover.run_all(
+        self.app_runner.run_all(
             &binaries,
             &charms_tx,
             &norm_spell.app_public_inputs,
             &app_private_inputs,
-            None,
         )?;
 
         Ok(())
@@ -205,7 +206,7 @@ impl Cast for SpellCli {
         let funding_utxo_value = wallet::funding_utxo_value(&funding_utxo_outpoint)?;
         let change_address = wallet::new_change_address()?.assume_checked().to_string();
 
-        let binaries = cli::app::binaries_by_vk(&self.app_prover, app_bins)?;
+        let binaries = cli::app::binaries_by_vk(&self.app_runner, app_bins)?;
 
         let txs = self
             .spell_prover

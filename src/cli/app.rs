@@ -1,5 +1,6 @@
 pub(crate) use crate::{app::Prover, spell::Spell};
 use anyhow::{anyhow, ensure, Result};
+use charms_app_runner::AppRunner;
 use charms_data::{Data, B32};
 use sha2::{Digest, Sha256};
 use std::{
@@ -87,8 +88,8 @@ pub fn run(spell: PathBuf, path: Option<PathBuf>) -> Result<()> {
             fs::read(bin_path)?
         }
     };
-    let prover = Prover::new();
-    let vk = prover.vk(&binary);
+    let app_runner = AppRunner::new();
+    let vk = app_runner.vk(&binary);
 
     let spell: Spell = serde_yaml::from_slice(
         &fs::read(&spell).map_err(|e| anyhow!("error reading {:?}: {}", &spell, e))?,
@@ -103,7 +104,7 @@ pub fn run(spell: PathBuf, path: Option<PathBuf>) -> Result<()> {
         app_present = true;
         let x = data_for_key(&public_inputs, k);
         let w = data_for_key(&private_inputs, k);
-        prover.run(&binary, app, &tx, &x, &w)?;
+        app_runner.run(&binary, app, &tx, &x, &w)?;
         eprintln!("✅  satisfied app contract for: {}", app);
     }
     if !app_present {
@@ -120,16 +121,16 @@ fn data_for_key(inputs: &BTreeMap<String, Data>, k: &String) -> Data {
     }
 }
 
-#[tracing::instrument(level = "debug", skip(app_prover))]
+#[tracing::instrument(level = "debug", skip(app_runner))]
 pub fn binaries_by_vk(
-    app_prover: &Prover,
+    app_runner: &AppRunner,
     app_bins: Vec<PathBuf>,
 ) -> Result<BTreeMap<B32, Vec<u8>>> {
     let binaries: BTreeMap<B32, Vec<u8>> = app_bins
         .iter()
         .map(|path| {
             let binary = std::fs::read(path)?;
-            let vk = app_prover.vk(&binary);
+            let vk = app_runner.vk(&binary);
             Ok((vk, binary))
         })
         .collect::<Result<_>>()?;

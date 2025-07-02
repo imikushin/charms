@@ -1,26 +1,17 @@
-#[cfg(not(feature = "prover"))]
-use crate::spell::Spell;
-#[cfg(not(feature = "prover"))]
-use crate::tx::norm_spell;
 use crate::{
     cli::ServerConfig,
-    spell::{ProveRequest, ProveSpellTx, Prover},
+    spell::{ProveRequest, ProveSpellTx, Prover, Spell},
+    tx::norm_spell,
     utils::AsyncShared,
 };
 use anyhow::Result;
-#[cfg(not(feature = "prover"))]
-use axum::{extract::Path, routing::put};
 use axum::{
-    extract::State,
+    extract::{Path, State},
     http::StatusCode,
-    routing::{get, post},
+    routing::{get, post, put},
     Json, Router,
 };
-#[cfg(not(feature = "prover"))]
-use charms_client::tx::EnchantedTx;
-#[cfg(not(feature = "prover"))]
-use charms_client::tx::Tx;
-#[cfg(not(feature = "prover"))]
+use charms_client::tx::{EnchantedTx, Tx};
 use charms_data::TxId;
 use serde::{Deserialize, Serialize};
 use std::{sync::Arc, time::Duration};
@@ -65,7 +56,6 @@ impl Server {
 
         // Build router with CORS middleware
         let app = Router::new();
-        #[cfg(not(feature = "prover"))]
         let app = app.route("/spells/{txid}", put(show_spell_for_tx_hex));
         let app = app
             .route("/spells/prove", post(prove_spell))
@@ -85,16 +75,6 @@ impl Server {
 
 // Handlers
 
-// #[cfg(not(feature = "prover"))]
-// #[tracing::instrument(level = "debug", skip_all)]
-// async fn show_spell_by_txid(
-//     State(rpc): State<Arc<Client>>,
-//     Path(txid): Path<String>,
-// ) -> Result<Json<Spell>, StatusCode> {
-//     get_spell(rpc, &txid).map(Json)
-// }
-
-#[cfg(not(feature = "prover"))]
 #[tracing::instrument(level = "debug", skip_all)]
 async fn show_spell_for_tx_hex(
     Path(txid): Path<String>,
@@ -118,7 +98,6 @@ async fn prove_spell(
     Ok(Json(result))
 }
 
-#[cfg(not(feature = "prover"))]
 fn show_spell(txid: &str, request: &ShowSpellRequest) -> Result<Spell, StatusCode> {
     let txid = TxId::from_str(txid).map_err(|_| StatusCode::BAD_REQUEST)?;
     let tx = Tx::from_hex(&request.tx_hex).map_err(|_| StatusCode::BAD_REQUEST)?;
@@ -138,7 +117,6 @@ fn show_spell(txid: &str, request: &ShowSpellRequest) -> Result<Spell, StatusCod
     extract_spell(&tx)
 }
 
-#[cfg(not(feature = "prover"))]
 fn extract_spell(tx: &Tx) -> Result<Spell, StatusCode> {
     match norm_spell(tx) {
         None => Err(StatusCode::NO_CONTENT),

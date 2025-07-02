@@ -182,6 +182,8 @@ pub enum SpellCommands {
     /// commit transaction. Signs both the commit and spell transactions with the user's wallet.
     /// Returns the hex-encoded signed commit and spell transactions.
     Cast(#[command(flatten)] SpellCastParams),
+    /// Print the current protocol version and spell VK (verification key) in JSON.
+    Vk,
 }
 
 #[derive(Subcommand)]
@@ -294,6 +296,7 @@ pub async fn run() -> anyhow::Result<()> {
                 SpellCommands::Check(params) => spell_cli.check(params),
                 SpellCommands::Prove(params) => spell_cli.prove(params).await,
                 SpellCommands::Cast(params) => spell_cli.cast(params).await,
+                SpellCommands::Vk => spell_cli.print_vk(),
             }
         }
         Commands::Tx { command } => match command {

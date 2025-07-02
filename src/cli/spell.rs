@@ -11,7 +11,7 @@ use crate::{
 };
 use anyhow::{ensure, Error, Result};
 use bitcoin::consensus::encode::deserialize_hex;
-use charms_client::tx::Tx;
+use charms_client::{tx::Tx, CURRENT_VERSION};
 use charms_data::UtxoId;
 use serde_json::json;
 use std::{future::Future, sync::Arc};
@@ -31,6 +31,17 @@ pub trait Cast {
 pub struct SpellCli {
     pub app_prover: Arc<app::Prover>,
     pub spell_prover: Arc<spell::Prover>,
+}
+
+impl SpellCli {
+    pub(crate) fn print_vk(&self) -> Result<()> {
+        let json = json!({
+            "version": CURRENT_VERSION,
+            "vk": SPELL_VK.to_string(),
+        });
+        println!("{}", json);
+        Ok(())
+    }
 }
 
 impl Prove for SpellCli {

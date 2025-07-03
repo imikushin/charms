@@ -315,8 +315,7 @@ pub fn make_transactions(
     spell_data: &[u8],
     fee_rate: f64,
     charms_fee: Option<CharmsFee>,
-    total_app_cycles: u64,
-    spell_cycles: u64,
+    total_cycles: u64,
 ) -> Result<Vec<Tx>, Error> {
     let change_address = bitcoin::Address::from_str(&change_address)?;
 
@@ -333,7 +332,7 @@ pub fn make_transactions(
     });
 
     // Calculate fee
-    let charms_fee = spell::get_charms_fee(charms_fee, total_app_cycles, spell_cycles);
+    let charms_fee = spell::get_charms_fee(charms_fee, total_cycles);
 
     // Parse fee rate
     let fee_rate = FeeRate::from_sat_per_kwu((fee_rate * 250.0) as u64);

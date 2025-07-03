@@ -40,7 +40,7 @@ impl Prover {
         app_public_inputs: &BTreeMap<App, Data>,
         app_private_inputs: BTreeMap<App, Data>,
         spell_stdin: &mut SP1Stdin,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<u64> {
         let pk_vks = app_binaries
             .iter()
             .map(|(vk_hash, binary)| {
@@ -48,6 +48,8 @@ impl Prover {
                 (vk_hash, (pk, vk))
             })
             .collect::<BTreeMap<_, _>>();
+
+        let mut total_app_cycles = 0;
 
         for (app, x) in app_public_inputs {
             let Some((pk, vk)) = pk_vks.get(&app.vk) else {
@@ -59,7 +61,7 @@ impl Prover {
             let empty = Data::empty();
             let w = app_private_inputs.get(app).unwrap_or(&empty);
             app_stdin.write_vec(util::write(&(app, &tx, x, w))?);
-            let app_proof =
+            let (app_proof, app_cycles) =
                 self.sp1_client
                     .get()
                     .prove(pk, &app_stdin, SP1ProofMode::Compressed)?;
@@ -69,9 +71,10 @@ impl Prover {
             };
             tracing::info!("app proof generated: {}", app);
             spell_stdin.write_proof(*compressed_proof, vk.vk.clone());
+            total_app_cycles += app_cycles;
         }
 
-        Ok(())
+        Ok(total_app_cycles)
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
@@ -162,7 +165,11 @@ impl Prover {
 
         let mut app_stdin = SP1Stdin::new();
         app_stdin.write_vec(util::write(&(app, tx, x, w))?);
-        let (committed_values, _report) = self.sp1_client.get().execute(app_binary, &app_stdin)?;
+        let (committed_values, _, _report) =
+            self.sp1_client
+                .get()
+                .inner()
+                .execute(app_binary, &app_stdin, SP1Context::default())?;
         let com: (App, Transaction, Data) = util::read(committed_values.to_vec().as_slice())?;
         ensure!(
             (&com.0, &com.1, &com.2) == (app, tx, x),

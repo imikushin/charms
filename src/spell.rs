@@ -374,7 +374,7 @@ pub trait Prove {
     /// - `Ok((NormalizedSpell, Proof, u64))`: On success, returns a tuple containing:
     ///   * The original `NormalizedSpell` object that was proven.
     ///   * The generated `Proof` object, which provides evidence of correctness for the spell.
-    ///   * A `u64` value indicating the number of cycles consumed during the proving process.
+    ///   * A `u64` value indicating the total number of cycles consumed during the proving process.
     /// - `Err(anyhow::Error)`: Returns an error if the proving process fails due to validation
     ///   issues, computation errors, or other runtime problems.
     ///
@@ -392,7 +392,6 @@ pub trait Prove {
         app_private_inputs: BTreeMap<App, Data>,
         prev_txs: Vec<Tx>,
         tx_ins_beamed_source_utxos: BTreeMap<UtxoId, UtxoId>,
-        expected_cycles: Option<Vec<u64>>,
     ) -> anyhow::Result<(NormalizedSpell, Proof, u64)>;
 }
 
@@ -404,7 +403,6 @@ impl Prove for Prover {
         app_private_inputs: BTreeMap<App, Data>,
         prev_txs: Vec<Tx>,
         tx_ins_beamed_source_utxos: BTreeMap<UtxoId, UtxoId>,
-        _expected_cycles: Option<Vec<u64>>,
     ) -> anyhow::Result<(NormalizedSpell, Proof, u64)> {
         let mut stdin = SP1Stdin::new();
 
@@ -432,19 +430,7 @@ impl Prove for Prover {
 
         let app_public_inputs = &norm_spell.app_public_inputs;
 
-        // TODO add a way to pass the expected cycles to the prover, remove this
-        // verify that apps execute within expected cycles
-        // if expected_cycles.is_some() {
-        //     self.app_prover.run_all(
-        //         app_binaries,
-        //         &tx,
-        //         app_public_inputs,
-        //         &app_private_inputs,
-        //         expected_cycles,
-        //     )?;
-        // }
-
-        self.app_prover.prove(
+        let app_cycles = self.app_prover.prove(
             app_binaries,
             tx,
             app_public_inputs,
@@ -453,22 +439,16 @@ impl Prove for Prover {
         )?;
 
         let (pk, _) = self.sp1_client.get().setup(SPELL_CHECKER_BINARY);
-        // TODO find a way to get cycles count from the prover, remove this
-        let (_, report) = self
-            .sp1_client
-            .get()
-            .execute(SPELL_CHECKER_BINARY, &stdin)?;
-
-        let proof = self
-            .sp1_client
-            .get()
-            .prove(&pk, &stdin, SP1ProofMode::Groth16)?;
+        let (proof, spell_cycles) =
+            self.sp1_client
+                .get()
+                .prove(&pk, &stdin, SP1ProofMode::Groth16)?;
         let proof = proof.bytes().into_boxed_slice();
 
         let mut norm_spell2 = norm_spell;
         norm_spell2.tx.ins = None;
 
-        Ok((norm_spell2, proof, report.total_instruction_count()))
+        Ok((norm_spell2, proof, app_cycles + spell_cycles))
     }
 }
 
@@ -566,32 +546,15 @@ impl ProveSpellTx for Prover {
 
         let (norm_spell, app_private_inputs, tx_ins_beamed_source_utxos) = spell.normalized()?;
 
-        let prev_spells = charms_client::prev_spells(&prev_txs, SPELL_VK);
-        let charms_tx = to_tx(&norm_spell, &prev_spells, &tx_ins_beamed_source_utxos);
-
-        let expected_cycles = self.app_prover.run_all(
-            &binaries,
-            &charms_tx,
-            &norm_spell.app_public_inputs,
-            &app_private_inputs,
-            None,
-        )?;
-        let total_app_cycles: u64 = expected_cycles.iter().sum();
-
-        let (norm_spell, proof, spell_cycles) = self.prove(
+        let (norm_spell, proof, total_cycles) = self.prove(
             norm_spell,
             &binaries,
             app_private_inputs,
             prev_txs,
             tx_ins_beamed_source_utxos,
-            Some(expected_cycles),
         )?;
 
-        tracing::info!(
-            "proof generated. total app cycles: {}, spell cycles: {}",
-            total_app_cycles,
-            spell_cycles,
-        );
+        tracing::info!("proof generated. total cycles: {}", total_cycles,);
 
         // Serialize spell into CBOR
         let spell_data = util::write(&(&norm_spell, &proof))?;
@@ -607,8 +570,7 @@ impl ProveSpellTx for Prover {
                     &spell_data,
                     fee_rate,
                     charms_fee,
-                    total_app_cycles,
-                    spell_cycles,
+                    total_cycles,
                 )?;
                 Ok(to_hex_txs(&txs))
             }
@@ -668,23 +630,22 @@ impl Prover {
             .all(|input| prev_txs_by_id
                 .contains_key(&TxId(input.previous_output.txid.to_byte_array()))));
 
-        let (norm_spell, app_private_inputs, tx_ins_beamed_source_utxos) =
-            prove_request.spell.normalized()?;
+        // let (norm_spell, app_private_inputs, tx_ins_beamed_source_utxos) =
+        //     prove_request.spell.normalized()?;
 
-        let prev_spells = charms_client::prev_spells(&prev_txs, SPELL_VK);
-        let charms_tx = to_tx(&norm_spell, &prev_spells, &tx_ins_beamed_source_utxos);
+        // let prev_spells = charms_client::prev_spells(&prev_txs, SPELL_VK);
+        // let charms_tx = to_tx(&norm_spell, &prev_spells, &tx_ins_beamed_source_utxos);
 
-        let expected_cycles = self.app_prover.run_all(
-            &prove_request.binaries,
-            &charms_tx,
-            &norm_spell.app_public_inputs,
-            &app_private_inputs,
-            None,
-        )?;
-        let total_app_cycles: u64 = expected_cycles.iter().sum();
+        // let expected_cycles = self.app_prover.run_all(
+        //     &prove_request.binaries,
+        //     &charms_tx,
+        //     &norm_spell.app_public_inputs,
+        //     &app_private_inputs,
+        //     None,
+        // )?;
+        // let total_app_cycles: u64 = expected_cycles.iter().sum();
 
-        let charms_fee =
-            get_charms_fee(prove_request.charms_fee.clone(), total_app_cycles, 8000000).to_sat();
+        let charms_fee = get_charms_fee(prove_request.charms_fee.clone(), 8000000).to_sat();
 
         let total_sats_in =
             tx.0.input
@@ -730,18 +691,11 @@ pub fn to_hex_txs(txs: &[Tx]) -> Vec<String> {
     txs.iter().map(|tx| tx.hex()).collect()
 }
 
-pub fn get_charms_fee(
-    charms_fee: Option<CharmsFee>,
-    total_app_cycles: u64,
-    spell_cycles: u64,
-) -> Amount {
+pub fn get_charms_fee(charms_fee: Option<CharmsFee>, total_cycles: u64) -> Amount {
     charms_fee
         .as_ref()
         .map(|charms_fee| {
-            Amount::from_sat(
-                (total_app_cycles + spell_cycles) * charms_fee.fee_rate / 1000000
-                    + charms_fee.fee_base,
-            )
+            Amount::from_sat(total_cycles * charms_fee.fee_rate / 1000000 + charms_fee.fee_base)
         })
         .unwrap_or_default()
 }

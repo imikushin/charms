@@ -4,6 +4,8 @@ pub mod spell;
 pub mod tx;
 pub mod wallet;
 
+#[cfg(feature = "prover")]
+use crate::utils::sp1::cuda::SP1CudaProver;
 use crate::{
     cli::{
         server::Server,
@@ -20,10 +22,6 @@ use clap_complete::{generate, Shell};
 #[cfg(not(feature = "prover"))]
 use reqwest::Client;
 use serde::Serialize;
-#[cfg(feature = "prover")]
-use sp1_cuda::MoongateServer;
-#[cfg(feature = "prover")]
-use sp1_sdk::CudaProver;
 use sp1_sdk::{install::try_install_circuit_artifacts, CpuProver, ProverClient};
 use spell::Cast;
 use std::{io, net::IpAddr, path::PathBuf, str::FromStr, sync::Arc};
@@ -427,12 +425,10 @@ fn spell_sp1_client(app_sp1_client: &Arc<Shared<BoxedSP1Prover>>) -> Arc<Shared<
 
 #[tracing::instrument(level = "info")]
 #[cfg(feature = "prover")]
-fn charms_sp1_cuda_client() -> CudaProver {
-    CudaProver::new(
+fn charms_sp1_cuda_client() -> utils::sp1::CudaProver {
+    utils::sp1::CudaProver::new(
         sp1_prover::SP1Prover::new(),
-        MoongateServer::External {
-            endpoint: gpu_service_url(),
-        },
+        SP1CudaProver::new(gpu_service_url()).unwrap(),
     )
 }
 

@@ -1,13 +1,14 @@
-use sp1_prover::components::CpuProverComponents;
+use prover::CharmsSP1Prover;
 use std::sync::OnceLock;
 use tokio::sync::OnceCell;
 
 pub(crate) mod logger;
 pub mod pool;
-#[cfg(feature = "none")]
+pub mod prover;
+#[cfg(feature = "prover")]
 pub(crate) mod sp1;
 
-pub type BoxedSP1Prover = Box<dyn sp1_sdk::Prover<CpuProverComponents>>;
+pub type BoxedSP1Prover = Box<dyn CharmsSP1Prover>;
 
 /// Create a string representation of the index `i` in the format `$xxxx`.
 pub fn str_index(i: &u32) -> String {

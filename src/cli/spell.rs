@@ -1,16 +1,12 @@
 use crate::{
     app, cli,
-    cli::{
-        wallet, wallet::MIN_SATS, SpellCastParams, SpellCheckParams, SpellProveParams, BITCOIN,
-        CARDANO,
-    },
+    cli::{SpellCheckParams, SpellProveParams, BITCOIN, CARDANO},
     spell,
     spell::{ProveRequest, ProveSpellTx, Spell},
     tx::{bitcoin_tx, cardano_tx},
     SPELL_VK,
 };
-use anyhow::{ensure, Error, Result};
-use bitcoin::consensus::encode::deserialize_hex;
+use anyhow::{ensure, Result};
 use charms_client::{tx::Tx, CURRENT_VERSION};
 use charms_data::UtxoId;
 use serde_json::json;
@@ -22,10 +18,6 @@ pub trait Check {
 
 pub trait Prove {
     fn prove(&self, params: SpellProveParams) -> impl Future<Output = Result<()>>;
-}
-
-pub trait Cast {
-    fn cast(&self, params: SpellCastParams) -> impl Future<Output = Result<()>>;
 }
 
 pub struct SpellCli {
@@ -173,101 +165,4 @@ impl Check for SpellCli {
 
         Ok(())
     }
-}
-
-impl Cast for SpellCli {
-    async fn cast(
-        &self,
-        SpellCastParams {
-            spell,
-            app_bins,
-            funding_utxo,
-            fee_rate,
-            chain,
-            prev_txs,
-        }: SpellCastParams,
-    ) -> Result<()> {
-        ensure!(chain == "bitcoin", "chain must be bitcoin for now");
-
-        let funding_utxo_str = funding_utxo.as_str();
-
-        // Parse funding UTXO early: to fail fast
-        let funding_utxo = UtxoId::from_str(&funding_utxo_str)?;
-        let funding_utxo_outpoint = cli::tx::parse_outpoint(funding_utxo_str)?;
-
-        ensure!(fee_rate >= 1.0, "fee rate must be >= 1.0");
-        let mut spell: Spell = serde_yaml::from_slice(&std::fs::read(spell)?)?;
-
-        spell_pre_checks(&spell)?;
-
-        for u in spell.outs.iter_mut() {
-            u.amount.get_or_insert(MIN_SATS);
-        }
-
-        let prev_txs = match prev_txs {
-            Some(prev_txs) => prev_txs,
-            None => match chain.as_str() {
-                BITCOIN => gather_prev_txs(&spell)?,
-                CARDANO => unimplemented!("not implemented for Cardano"),
-                _ => unimplemented!(),
-            },
-        };
-
-        let funding_utxo_value = wallet::funding_utxo_value(&funding_utxo_outpoint)?;
-        let change_address = wallet::new_change_address()?.assume_checked().to_string();
-
-        let binaries = cli::app::binaries_by_vk(&self.app_prover, app_bins)?;
-
-        let txs = self
-            .spell_prover
-            .prove_spell_tx(ProveRequest {
-                spell,
-                binaries,
-                prev_txs,
-                funding_utxo,
-                funding_utxo_value,
-                change_address,
-                fee_rate,
-                charms_fee: None,
-                chain,
-            })
-            .await?;
-        let [commit_tx, spell_tx] = txs.as_slice() else {
-            unreachable!()
-        };
-
-        let signed_commit_tx_hex = wallet::sign_tx(&commit_tx)?;
-        let signed_spell_tx_hex = wallet::sign_spell_tx(&spell_tx, &deserialize_hex(commit_tx)?)?;
-
-        // Print JSON array of transaction hexes
-        println!(
-            "{}",
-            serde_json::to_string(&[signed_commit_tx_hex, signed_spell_tx_hex])?
-        );
-
-        Ok(())
-    }
-}
-
-#[tracing::instrument(level = "debug", skip(spell))]
-fn gather_prev_txs(spell: &Spell) -> Result<Vec<String>, Error> {
-    let tx = bitcoin_tx::from_spell(&spell)?;
-    let prev_txs = cli::tx::get_prev_txs(&tx.0)?;
-    Ok(prev_txs)
-}
-
-#[tracing::instrument(level = "debug", skip(spell))]
-fn spell_pre_checks(spell: &Spell) -> Result<(), Error> {
-    // make sure spell inputs all have utxo_id
-    ensure!(
-        spell.ins.iter().all(|u| u.utxo_id.is_some()),
-        "all spell inputs must have utxo_id"
-    );
-
-    // make sure spell outputs all have addresses
-    ensure!(
-        spell.outs.iter().all(|u| u.address.is_some()),
-        "all spell outputs must have addresses"
-    );
-    Ok(())
 }

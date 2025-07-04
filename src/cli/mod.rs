@@ -23,7 +23,6 @@ use clap_complete::{generate, Shell};
 use reqwest::Client;
 use serde::Serialize;
 use sp1_sdk::{install::try_install_circuit_artifacts, CpuProver, ProverClient};
-use spell::Cast;
 use std::{io, net::IpAddr, path::PathBuf, str::FromStr, sync::Arc};
 use utils::AsyncShared;
 
@@ -175,11 +174,6 @@ pub enum SpellCommands {
     Check(#[command(flatten)] SpellCheckParams),
     /// Prove the spell is correct.
     Prove(#[command(flatten)] SpellProveParams),
-    /// Cast a spell.
-    /// Creates a spell, creates the underlying Bitcoin transaction, proves the spell, creates the
-    /// commit transaction. Signs both the commit and spell transactions with the user's wallet.
-    /// Returns the hex-encoded signed commit and spell transactions.
-    Cast(#[command(flatten)] SpellCastParams),
     /// Print the current protocol version and spell VK (verification key) in JSON.
     Vk,
 }
@@ -293,7 +287,6 @@ pub async fn run() -> anyhow::Result<()> {
             match command {
                 SpellCommands::Check(params) => spell_cli.check(params),
                 SpellCommands::Prove(params) => spell_cli.prove(params).await,
-                SpellCommands::Cast(params) => spell_cli.cast(params).await,
                 SpellCommands::Vk => spell_cli.print_vk(),
             }
         }

@@ -6,7 +6,7 @@ use crate::{
     utils::str_index,
 };
 use anyhow::{ensure, Result};
-use bitcoin::{address::NetworkUnchecked, hashes::Hash, Address, OutPoint, Transaction};
+use bitcoin::{hashes::Hash, Transaction};
 use charms_client::{bitcoin_tx::BitcoinTx, tx::Tx};
 use charms_data::{App, Data, TxId, UtxoId};
 use serde::{Deserialize, Serialize};
@@ -194,50 +194,3 @@ fn get_tx(txid: &str) -> Result<Transaction> {
 }
 
 pub const MIN_SATS: u64 = 1000;
-
-pub(crate) fn sign_spell_tx(spell_tx_hex: &String, commit_tx: &Transaction) -> Result<String> {
-    let cmd_line = format!(
-        r#"bitcoin-cli signrawtransactionwithwallet {} '[{{"txid":"{}","vout":0,"scriptPubKey":"{}","amount":{}}}]' | jq -r '.hex'"#,
-        spell_tx_hex,
-        commit_tx.compute_txid(),
-        &commit_tx.output[0].script_pubkey.to_hex_string(),
-        commit_tx.output[0].value.to_btc()
-    );
-    let cmd_out = Command::new("bash")
-        .args(&["-c", cmd_line.as_str()])
-        .output()?;
-    Ok(String::from_utf8(cmd_out.stdout)?.trim().to_string())
-}
-
-pub(crate) fn sign_tx(tx_hex: &str) -> Result<String> {
-    let cmd_out = Command::new("bash")
-        .args(&[
-            "-c",
-            format!(
-                "bitcoin-cli signrawtransactionwithwallet {} | jq -r '.hex'",
-                tx_hex
-            )
-            .as_str(),
-        ])
-        .output()?;
-    Ok(String::from_utf8(cmd_out.stdout)?.trim().to_string())
-}
-
-pub(crate) fn new_change_address() -> Result<Address<NetworkUnchecked>> {
-    let cmd_out = Command::new("bitcoin-cli")
-        .args(&["getrawchangeaddress"])
-        .output()?;
-    Ok(String::from_utf8(cmd_out.stdout)?
-        .trim()
-        .to_string()
-        .parse()?)
-}
-
-pub(crate) fn funding_utxo_value(utxo: &OutPoint) -> Result<u64> {
-    let cmd = format!(
-        "bitcoin-cli gettxout {} {} | jq -r '.value*100000000 | round'",
-        utxo.txid, utxo.vout
-    );
-    let cmd_out = Command::new("bash").args(&["-c", &cmd]).output()?;
-    Ok(String::from_utf8(cmd_out.stdout)?.trim().parse()?)
-}

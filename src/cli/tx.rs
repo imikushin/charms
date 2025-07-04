@@ -3,19 +3,10 @@ use crate::{
     cli::{BITCOIN, CARDANO},
     tx,
 };
-use anyhow::{anyhow, Result};
-use bitcoin::{consensus::encode::serialize_hex, OutPoint, Transaction};
+use anyhow::Result;
+use bitcoin::{consensus::encode::serialize_hex, Transaction};
 use charms_client::{bitcoin_tx::BitcoinTx, cardano_tx::CardanoTx, tx::Tx};
 use std::process::Command;
-
-pub(crate) fn parse_outpoint(s: &str) -> Result<OutPoint> {
-    let parts: Vec<&str> = s.split(':').collect();
-    if parts.len() != 2 {
-        return Err(anyhow!("Invalid UTXO format. Expected txid:vout"));
-    }
-
-    Ok(OutPoint::new(parts[0].parse()?, parts[1].parse()?))
-}
 
 pub fn tx_show_spell(chain: String, tx: String, json: bool) -> Result<()> {
     let tx = match chain.as_str() {

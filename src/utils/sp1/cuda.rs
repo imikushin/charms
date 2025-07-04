@@ -9,6 +9,7 @@ use sp1_cuda::{
 };
 use sp1_prover::{InnerSC, SP1CoreProof, SP1ProvingKey, SP1RecursionProverError, SP1VerifyingKey};
 use std::{
+    fmt::Debug,
     future::Future,
     io,
     time::{Duration, Instant},
@@ -45,32 +46,14 @@ impl SP1CudaProver {
 
     #[tracing::instrument(level = "info", skip_all)]
     pub fn ready(&self) -> anyhow::Result<()> {
-        block_on(async {
-            let timeout = Duration::from_secs(30);
-            let start_time = Instant::now();
-
-            tracing::info!("waiting for proving server to be ready");
-            loop {
-                if start_time.elapsed() > timeout {
-                    bail!("Timeout: proving server did not become ready within 30 seconds. Please check your network settings.");
-                }
-
-                match self.client.ready(ReadyRequest {}).await {
-                    Ok(response) if response.ready => {
-                        break;
-                    }
-                    Ok(_) => {
-                        tracing::info!("proving server is not ready, retrying...");
-                    }
-                    Err(e) => {
-                        tracing::warn!("Error checking server readiness: {}", e);
-                    }
-                }
-                tokio::time::sleep(Duration::from_secs(1)).await;
+        tracing::info!("waiting for proving server to be ready");
+        block_on(retry(|| async {
+            match self.client.ready(ReadyRequest {}).await {
+                Ok(response) if response.ready => Ok(()),
+                Ok(_) => bail!("proving server is not ready"),
+                Err(e) => bail!("Error checking server readiness: {}", e),
             }
-            Ok(())
-        }).map_err(|e| anyhow!(e))?;
-        Ok(())
+        }))
     }
 
     /// Executes the [sp1_prover::SP1Prover::prove_core] method inside the container.
@@ -132,6 +115,7 @@ async fn retry<Fut, F, T, E>(f: F) -> Result<T, E>
 where
     F: Fn() -> Fut,
     Fut: Future<Output = Result<T, E>>,
+    E: Debug,
 {
     let timeout = Duration::from_secs(30);
     let start_time = Instant::now();
@@ -141,6 +125,7 @@ where
         if start_time.elapsed() > timeout {
             return r;
         }
+        tracing::warn!("{:?}", r.err().expect("it must be an error at this point"));
         tracing::info!("retrying...");
         tokio::time::sleep(Duration::from_secs(1)).await;
         r = f().await;

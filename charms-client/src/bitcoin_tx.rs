@@ -1,4 +1,4 @@
-use crate::{tx::EnchantedTx, NormalizedSpell, Proof};
+use crate::{tx, tx::EnchantedTx, NormalizedSpell, Proof};
 use anyhow::{anyhow, bail, ensure};
 use bitcoin::{
     consensus::encode::{deserialize_hex, serialize_hex},
@@ -9,7 +9,6 @@ use bitcoin::{
 };
 use charms_data::{util, TxId, UtxoId};
 use serde::{Deserialize, Serialize};
-use sp1_verifier::Groth16Verifier;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct BitcoinTx(pub bitcoin::Transaction);
@@ -42,15 +41,11 @@ impl EnchantedTx for BitcoinTx {
 
         let spell = spell_with_ins(spell, tx_ins);
 
-        let (spell_vk, groth16_vk) = crate::tx::vks(spell.version, spell_vk)?;
+        let spell_vk = tx::spell_vk(spell.version, spell_vk)?;
 
-        Groth16Verifier::verify(
-            &proof,
-            crate::tx::to_sp1_pv(spell.version, &(spell_vk, &spell)).as_slice(),
-            spell_vk,
-            groth16_vk,
-        )
-        .map_err(|e| anyhow!("could not verify spell proof: {}", e))?;
+        let public_values = tx::to_serialized_pv(spell.version, &(spell_vk, &spell));
+
+        tx::verify_snark_proof(&proof, &public_values, spell_vk, spell.version)?;
 
         Ok(spell)
     }

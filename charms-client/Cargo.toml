@@ -9,6 +9,7 @@ license.workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
+ark-groth16 = { version = "0.5.0" }
 bitcoin = { workspace = true, features = ["serde"] }
 charms-data = { path = "../charms-data", version = "0.7.0" }
 cml-chain = { workspace = true }

@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
+pub mod ark;
 pub mod bitcoin_tx;
 pub mod cardano_tx;
 pub mod tx;

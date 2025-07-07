@@ -1,4 +1,4 @@
-use crate::{tx::EnchantedTx, NormalizedSpell, Proof};
+use crate::{tx, tx::EnchantedTx, NormalizedSpell, Proof};
 use anyhow::{anyhow, ensure};
 use charms_data::{util, TxId, UtxoId};
 use cml_chain::{
@@ -7,8 +7,6 @@ use cml_chain::{
     transaction::{ConwayFormatTxOut, DatumOption, Transaction, TransactionOutput},
     Deserialize, Serialize, SetTransactionInput,
 };
-use sp1_verifier::Groth16Verifier;
-
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CardanoTx(pub Transaction);
 
@@ -71,15 +69,11 @@ impl EnchantedTx for CardanoTx {
 
         let spell = spell_with_ins(spell, inputs);
 
-        let (spell_vk, groth16_vk) = crate::tx::vks(spell.version, spell_vk)?;
+        let spell_vk = tx::spell_vk(spell.version, spell_vk)?;
 
-        Groth16Verifier::verify(
-            &proof,
-            crate::tx::to_sp1_pv(spell.version, &(spell_vk, &spell)).as_slice(),
-            spell_vk,
-            groth16_vk,
-        )
-        .map_err(|e| anyhow!("could not verify spell proof: {}", e))?;
+        let public_values = tx::to_serialized_pv(spell.version, &(spell_vk, &spell));
+
+        tx::verify_snark_proof(&proof, &public_values, spell_vk, spell.version)?;
 
         Ok(spell)
     }

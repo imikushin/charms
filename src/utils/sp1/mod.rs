@@ -92,10 +92,6 @@ impl Prover<CpuProverComponents> for CudaProver {
 }
 
 impl CharmsSP1Prover for CudaProver {
-    fn inner(&self) -> &SP1Prover<CpuProverComponents> {
-        &self.cpu_prover
-    }
-
     fn setup(&self, elf: &[u8]) -> (SP1ProvingKey, SP1VerifyingKey) {
         let (pk, _, _, vk) = self.cpu_prover.setup(elf);
         (pk, vk)

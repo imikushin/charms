@@ -1,9 +1,8 @@
 use sp1_core_machine::io::SP1Stdin;
-use sp1_prover::{components::CpuProverComponents, SP1Prover, SP1ProvingKey, SP1VerifyingKey};
+use sp1_prover::{components::CpuProverComponents, SP1ProvingKey, SP1VerifyingKey};
 use sp1_sdk::{CpuProver, EnvProver, Prover, SP1ProofMode, SP1ProofWithPublicValues};
 
 pub trait CharmsSP1Prover: Send + Sync {
-    fn inner(&self) -> &SP1Prover<CpuProverComponents>;
     fn setup(&self, elf: &[u8]) -> (SP1ProvingKey, SP1VerifyingKey);
     fn prove(
         &self,
@@ -14,10 +13,6 @@ pub trait CharmsSP1Prover: Send + Sync {
 }
 
 impl CharmsSP1Prover for CpuProver {
-    fn inner(&self) -> &SP1Prover<CpuProverComponents> {
-        <Self as Prover<CpuProverComponents>>::inner(self)
-    }
-
     fn setup(&self, elf: &[u8]) -> (SP1ProvingKey, SP1VerifyingKey) {
         let (pk, _, _, vk) = <Self as Prover<CpuProverComponents>>::inner(self).setup(elf);
         (pk, vk)
@@ -35,10 +30,6 @@ impl CharmsSP1Prover for CpuProver {
 }
 
 impl CharmsSP1Prover for EnvProver {
-    fn inner(&self) -> &SP1Prover<CpuProverComponents> {
-        <Self as Prover<CpuProverComponents>>::inner(self)
-    }
-
     fn setup(&self, elf: &[u8]) -> (SP1ProvingKey, SP1VerifyingKey) {
         let (pk, _, _, vk) = <Self as Prover<CpuProverComponents>>::inner(self).setup(elf);
         (pk, vk)

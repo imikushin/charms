@@ -11,14 +11,27 @@ use crate::{
     tx::cardano_tx,
 };
 use anyhow::{anyhow, ensure, Error};
+use ark_bls12_381::{fr::Fr, Bls12_381};
+use ark_ff::Field;
+use ark_groth16::Groth16;
+use ark_relations::r1cs::{
+    ConstraintSynthesizer, ConstraintSystem, ConstraintSystemRef, SynthesisError,
+};
+use ark_serialize::CanonicalSerialize;
+use ark_snark::{CircuitSpecificSetupSNARK, SNARK};
+use ark_std::{
+    rand::{RngCore, SeedableRng},
+    test_rng,
+};
+use bincode::Options;
 use bitcoin::{hashes::Hash, Amount};
 #[cfg(not(feature = "prover"))]
 use charms_client::bitcoin_tx::BitcoinTx;
-use charms_client::tx::Tx;
 pub use charms_client::{
     to_tx, NormalizedCharms, NormalizedSpell, NormalizedTransaction, Proof, SpellProverInput,
     CURRENT_VERSION,
 };
+use charms_client::{tx::Tx, AppProverOutput};
 use charms_data::{util, App, Charms, Data, Transaction, TxId, UtxoId, B32};
 #[cfg(not(feature = "prover"))]
 use reqwest::Client;
@@ -27,6 +40,8 @@ use serde_with::{base64::Base64, serde_as, IfIsHumanReadable};
 use sp1_sdk::{SP1ProofMode, SP1Stdin};
 use std::{
     collections::{BTreeMap, BTreeSet},
+    io::Read,
+    marker::PhantomData,
     sync::Arc,
 };
 
@@ -404,46 +419,72 @@ impl Prove for Prover {
         prev_txs: Vec<Tx>,
         tx_ins_beamed_source_utxos: BTreeMap<UtxoId, UtxoId>,
     ) -> anyhow::Result<(NormalizedSpell, Proof, u64)> {
-        let mut stdin = SP1Stdin::new();
-
         let prev_spells = charms_client::prev_spells(&prev_txs, SPELL_VK);
         let tx = to_tx(&norm_spell, &prev_spells, &tx_ins_beamed_source_utxos);
 
-        let app_prover_output = self.app_prover.prove(
-            app_binaries,
-            tx,
-            norm_spell.app_public_inputs.clone(),
-            app_private_inputs,
-            &mut stdin,
+        // TODO prove charms-app-checker run
+        let cycles = self.app_prover.runner.run_all(
+            &app_binaries,
+            &tx,
+            &norm_spell.app_public_inputs,
+            &app_private_inputs,
         )?;
+        let app_prover_output = match app_binaries.is_empty() {
+            true => None,
+            false => Some(AppProverOutput {
+                tx,
+                app_public_inputs: norm_spell.app_public_inputs.clone(),
+                cycles,
+            }),
+        };
 
         let app_cycles = app_prover_output
             .as_ref()
             .map(|o| o.cycles.iter().sum())
             .unwrap_or(0);
 
-        let prover_input = SpellProverInput {
-            self_spell_vk: SPELL_VK.to_string(),
-            prev_txs,
-            spell: norm_spell.clone(),
-            tx_ins_beamed_source_utxos,
-            app_prover_output,
-        };
+        // TODO prove charms-spell-checker run
+        ensure!(
+            charms_client::well_formed(&norm_spell, &prev_spells, &tx_ins_beamed_source_utxos),
+            "spell is not well-formed"
+        );
 
-        stdin.write_vec(util::write(&prover_input)?);
+        // TODO move this out of here and replace with good randomness
+        let mut rng = ark_std::rand::rngs::StdRng::seed_from_u64(test_rng().next_u64());
 
-        let (pk, _) = self.prover_client.get().setup(SPELL_CHECKER_BINARY);
-        let (proof, spell_cycles) =
-            self.prover_client
-                .get()
-                .prove(&pk, &stdin, SP1ProofMode::Groth16)?;
-        let proof = proof.bytes().into_boxed_slice();
+        eprintln!("Creating parameters...");
+
+        // Create parameters for our circuit
+        let (pk, vk) = {
+            let c = DummyCircuit::<Fr>::default();
+
+            Groth16::<Bls12_381>::setup(c, &mut rng)
+        }?;
+
+        let circuit = DummyCircuit::<Fr>::default();
+
+        let proof = Groth16::<Bls12_381>::prove(&pk, circuit, &mut rng)?;
+        let mut proof_bytes = vec![];
+        proof.serialize_compressed(&mut proof_bytes)?;
+
+        let (proof, spell_cycles) = (Box::new(proof_bytes), 0);
 
         let mut norm_spell2 = norm_spell;
         norm_spell2.tx.ins = None;
 
         // TODO app_cycles might turn out to be much more expensive than spell_cycles
         Ok((norm_spell2, proof, app_cycles + spell_cycles))
+    }
+}
+
+#[derive(Default)]
+pub struct DummyCircuit<F: Field> {
+    pub _dummy: PhantomData<F>,
+}
+
+impl<F: Field> ConstraintSynthesizer<F> for DummyCircuit<F> {
+    fn generate_constraints(self, cs: ConstraintSystemRef<F>) -> ark_relations::r1cs::Result<()> {
+        todo!()
     }
 }
 

@@ -78,7 +78,7 @@ impl NormalizedTransaction {
 }
 
 /// Proof of spell correctness.
-pub type Proof = Box<[u8]>;
+pub type Proof = Box<Vec<u8>>;
 
 /// Normalized representation of a spell.
 /// Can be committed as public input.

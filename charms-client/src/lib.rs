@@ -2,7 +2,7 @@ use crate::tx::{extract_and_verify_spell, EnchantedTx, Tx};
 use charms_data::{check, App, Charms, Data, Transaction, TxId, UtxoId, B32};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::{BTreeMap, BTreeSet};
+use std::{collections::{BTreeMap, BTreeSet}, fs::File, io::BufReader};
 
 pub mod bitcoin_tx;
 pub mod cardano_tx;
@@ -279,6 +279,27 @@ pub struct AppProverOutput {
     pub cycles: Vec<u64>,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BitcoinFinalityInput {
+    pub expected_tx: TxId,
+    pub pmt_proof: Vec<u8>,
+    pub block_bytes: Vec<u8>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SpellCheckerProverInput {
+    pub spell_input: SpellProverInput,
+    pub finality_input: BitcoinFinalityInput,
+    pub finality_vk: [u32;8],
+}
+
+
+pub fn load_finality_input(path: &str) -> Result<BitcoinFinalityInput, Box<dyn std::error::Error>> {
+    let file = File::open(path)?;
+    let reader = BufReader::new(file);
+    let input: BitcoinFinalityInput = serde_json::from_reader(reader)?;
+    Ok(input)
+}
 #[cfg(test)]
 mod test {
     #[test]

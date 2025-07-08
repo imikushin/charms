@@ -1,5 +1,6 @@
 pub mod app;
-pub mod bin;
+pub mod btc_finality;
+pub mod spell_checker;
 
 use crate::app::to_public_values;
 use charms_client::{tx::Tx, AppProverOutput, NormalizedSpell, APP_VK};

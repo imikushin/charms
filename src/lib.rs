@@ -15,7 +15,8 @@ pub const BTC_FINALITY_BINARY: &[u8] = include_bytes!("./bin/btc-finality");
 /// Verification key for the `charms-spell-checker` binary.
 pub const SPELL_VK: &str = "0x00de43c6a19774cbecd5fb6eb0eaad7f1d5852741bfdf91ac11217ee6fe52850";
 /// Verification key for the `btc-finality` binary.
-pub const BTC_FINALITY_VK: &str = "0x00c94046701e60fb4812584e39f4a00a667313bca8fe91fe06ef0c9c0dd67dfe";
+pub const BTC_FINALITY_VK: &str =
+    "0x00c94046701e60fb4812584e39f4a00a667313bca8fe91fe06ef0c9c0dd67dfe";
 
 #[cfg(test)]
 mod test {

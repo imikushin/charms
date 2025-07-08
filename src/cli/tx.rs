@@ -36,12 +36,18 @@ pub(crate) fn get_prev_txs(tx: &Transaction) -> Result<Vec<String>> {
         .collect()
 }
 
-/// Uses the `bitcoin-cli` in the shell to fetch a block from the block root and a partial merkle tree proof from the tx id and block root
-/// serializes the data to json and saves to given path (CLI calls this with a constant path)
-pub(crate) fn fetch_btc_finality_proof_input(tx_id: String, block_root: String, finality_data_path: &str) -> Result<()> {
+/// Uses the `bitcoin-cli` in the shell to fetch a block from the block root and a partial merkle
+/// tree proof from the tx id and block root serializes the data to json and saves to given path
+/// (CLI calls this with a constant path)
+pub(crate) fn fetch_btc_finality_proof_input(
+    tx_id: String,
+    block_root: String,
+    finality_data_path: &str,
+) -> Result<()> {
     let fetch_block = Command::new("bash")
         .args(&[
-            "-c", format!("bitcoin-cli getblock {} false", block_root).as_str()
+            "-c",
+            format!("bitcoin-cli getblock {} false", block_root).as_str(),
         ])
         .output()?;
 
@@ -49,22 +55,22 @@ pub(crate) fn fetch_btc_finality_proof_input(tx_id: String, block_root: String, 
 
     let fetch_txoutproof = Command::new("bash")
         .args(&[
-            "-c", format!("bitcoin-cli gettxoutproof '[\"{}\"]' {}",tx_id, block_root).as_str(), 
+            "-c",
+            format!("bitcoin-cli gettxoutproof '[\"{}\"]' {}", tx_id, block_root).as_str(),
         ])
         .output()?;
 
     let txoutproof = String::from_utf8(fetch_txoutproof.stdout).expect("Coudln't fetch block!");
 
-    let btc_finality_data = BitcoinFinalityInput { 
+    let btc_finality_data = BitcoinFinalityInput {
         expected_tx: TxId::from_str(tx_id.as_str()).expect("Failed parsing TxId"),
         pmt_proof: txoutproof.as_bytes().to_vec(),
         block_bytes: block.as_bytes().to_vec(),
-
     };
 
     // Write to json file
     let json = serde_json::to_string_pretty(&btc_finality_data)?;
-    let mut file = File::create(finality_data_path)?; 
+    let mut file = File::create(finality_data_path)?;
     file.write_all(json.as_bytes())?;
 
     Ok(())

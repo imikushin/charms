@@ -1,7 +1,9 @@
 use crate::{
-    app, tx::{bitcoin_tx, txs_by_txid}, utils::{self, BoxedSP1Prover, Shared}, BTC_FINALITY_VK, SPELL_CHECKER_BINARY, SPELL_VK
+    app,
+    tx::{bitcoin_tx, txs_by_txid},
+    utils::{self, BoxedSP1Prover, Shared},
+    BTC_FINALITY_VK, SPELL_CHECKER_BINARY, SPELL_VK,
 };
-use hex::FromHex;
 #[cfg(feature = "prover")]
 use crate::{
     cli::{BITCOIN, CARDANO},
@@ -17,6 +19,7 @@ pub use charms_client::{
     CURRENT_VERSION,
 };
 use charms_data::{util, App, Charms, Data, Transaction, TxId, UtxoId, B32};
+use hex::FromHex;
 #[cfg(not(feature = "prover"))]
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -432,8 +435,11 @@ impl Prove for Prover {
         };
 
         let finality_input = load_finality_input(
-            finality_proof_data_path.expect("Finality proof data path should be provided").as_str()
-        ).expect("Coudln't find finality input data json at given path!");
+            finality_proof_data_path
+                .expect("Finality proof data path should be provided")
+                .as_str(),
+        )
+        .expect("Coudln't find finality input data json at given path!");
 
         let btc_finality_proof_vk: [u32; 8] = <[u8; 32]>::from_hex(BTC_FINALITY_VK)
             .expect("Invalid hex")
@@ -445,7 +451,7 @@ impl Prove for Prover {
 
         let spell_checker_prover_input = SpellCheckerProverInput {
             spell_input: prover_input,
-            finality_input: finality_input,
+            finality_input,
             finality_vk: btc_finality_proof_vk,
         };
 

@@ -40,7 +40,11 @@ fn verify_block_inclusion(input: BitcoinInclusionInput) -> bool {
         "Merkle root does not match block header!"
     );
 
-    let txid_hash = input.expected_tx.to_string().parse().expect("Couldn't deserialize hash");;
+    let txid_hash = input
+        .expected_tx
+        .to_string()
+        .parse()
+        .expect("Couldn't deserialize hash");
     let expected_txid: Txid = Txid::from_raw_hash(txid_hash);
 
     if matched_txids.contains(&expected_txid) {
@@ -52,9 +56,7 @@ fn verify_block_inclusion(input: BitcoinInclusionInput) -> bool {
     };
 }
 
-
 pub fn verify_block_inclusion_main() {
-
     // Read an input to the program.
     let input_vec = sp1_zkvm::io::read_vec();
     let inclusion_input: BitcoinInclusionInput = util::read(input_vec.as_slice()).unwrap();
@@ -65,17 +67,18 @@ pub fn verify_block_inclusion_main() {
 #[cfg(test)]
 mod test {
 
-    use std::fs;
-    use std::io::Cursor;
-    use bitcoin::consensus::Decodable;
-    use bitcoin::hashes::{hex::FromHex, sha256d::Hash};
-    use bitcoin::{Block, MerkleBlock, Txid};
+    use bitcoin::{
+        consensus::Decodable,
+        hashes::{hex::FromHex, sha256d::Hash},
+        Block, MerkleBlock, Txid,
+    };
+    use std::{fs, io::Cursor};
 
     /// Get bitcoin block by running
-    /// `bitcoin-cli getblock 00000000000000000366c11e195318fd96ccce10b527c46560f9aa325f9e4bee false > block_hex.txt`
+    /// `bitcoin-cli getblock 00000000000000000366c11e195318fd96ccce10b527c46560f9aa325f9e4bee false
+    /// > block_hex.txt`
     #[test]
     fn test_tx_proof() {
-
         let hex_string = fs::read_to_string("block_hex.txt")
             .expect("Failed to read block_head.txt")
             .trim()

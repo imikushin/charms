@@ -1,11 +1,11 @@
 use std::io::Cursor;
 
 use bitcoin::{consensus::Decodable, Block, MerkleBlock, Txid};
-use charms_client::BitcoinInclusionInput;
+use charms_client::BitcoinFinalityInput;
 use charms_data::util;
 use sha2::{Digest, Sha256};
 
-fn verify_block_inclusion(input: BitcoinInclusionInput) -> bool {
+fn verify_block_inclusion(input: BitcoinFinalityInput) -> bool {
     let mut block_cursor = Cursor::new(input.block_bytes);
     let block: Block = Block::consensus_decode(&mut block_cursor).expect("Failed to decode block");
 
@@ -59,7 +59,7 @@ fn verify_block_inclusion(input: BitcoinInclusionInput) -> bool {
 pub fn verify_block_inclusion_main() {
     // Read an input to the program.
     let input_vec = sp1_zkvm::io::read_vec();
-    let inclusion_input: BitcoinInclusionInput = util::read(input_vec.as_slice()).unwrap();
+    let inclusion_input: BitcoinFinalityInput = util::read(input_vec.as_slice()).unwrap();
 
     assert!(verify_block_inclusion(inclusion_input));
 }
@@ -126,8 +126,6 @@ mod test {
             block.header.merkle_root, merkle_root,
             "Merkle root does not match block header!"
         );
-
-        println!("[1]");
 
         let txid_hex = "ed2b1f92e6a3830d9fcaa6a3cad07d35718435a660797f0c4d311455b886d322";
         let txid_hash: Hash = txid_hex.parse().expect("Couldn't deserialize hash");

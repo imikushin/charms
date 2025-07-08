@@ -10,11 +10,11 @@ use crate::{
     cli::{
         server::Server,
         spell::{Check, Prove, SpellCli},
+        tx::fetch_btc_finality_proof_input,
         wallet::{List, WalletCli},
     },
     spell::{CharmsFee, Prover},
-    utils,
-    utils::{BoxedSP1Prover, Shared},
+    utils::{self, BoxedSP1Prover, Shared},
 };
 use bitcoin::{address::NetworkUnchecked, Address};
 use charms_app_runner::AppRunner;
@@ -195,6 +195,10 @@ pub enum TxCommands {
         #[arg(long)]
         json: bool,
     },
+    FetchBitcoinProof {
+        tx: String,
+        block_root: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -273,6 +277,8 @@ pub enum UtilsCommands {
     InstallCircuitFiles,
 }
 
+pub const DEFAULT_BTC_FINALITY_PATH: &str = "./btc_inclusion_data.json";
+
 pub async fn run() -> anyhow::Result<()> {
     utils::logger::setup_logger();
 
@@ -293,6 +299,9 @@ pub async fn run() -> anyhow::Result<()> {
         }
         Commands::Tx { command } => match command {
             TxCommands::ShowSpell { chain, tx, json } => tx::tx_show_spell(chain, tx, json),
+            TxCommands::FetchBitcoinProof { tx, block_root } => {
+                fetch_btc_finality_proof_input(tx, block_root, DEFAULT_BTC_FINALITY_PATH)
+            }
         },
         Commands::App { command } => match command {
             AppCommands::New { name } => app::new(&name),

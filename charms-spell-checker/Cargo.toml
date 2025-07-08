@@ -16,9 +16,11 @@ name = "btc-finality"
 path = "bin/btc_finality.rs"
 
 [dependencies]
+charms = { path = ".." }
 charms-data = { path = "../charms-data", version = "0.7.0" }
 charms-client = { path = "../charms-client", version = "0.7.0" }
 serde = { workspace = true, features = ["derive"] }
+serde_cbor = "0.11.2"
 sp1-primitives = { workspace = true }
 sp1-zkvm = { workspace = true, features = ["verify"] }
 bitcoin = { workspace = true }

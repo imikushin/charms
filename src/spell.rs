@@ -2,7 +2,7 @@ use crate::{
     app,
     tx::{bitcoin_tx, txs_by_txid},
     utils::{self, BoxedSP1Prover, Shared},
-    BTC_FINALITY_VK, SPELL_CHECKER_BINARY, SPELL_VK,
+    SPELL_CHECKER_BINARY, SPELL_VK,
 };
 #[cfg(feature = "prover")]
 use crate::{
@@ -13,13 +13,12 @@ use anyhow::{anyhow, ensure, Error};
 use bitcoin::{hashes::Hash, Amount};
 #[cfg(not(feature = "prover"))]
 use charms_client::bitcoin_tx::BitcoinTx;
-use charms_client::{load_finality_input, tx::Tx, SpellCheckerProverInput};
+use charms_client::{load_finality_input, tx::Tx, NetworkFinalityProofs, SpellCheckerProverInput};
 pub use charms_client::{
     to_tx, NormalizedCharms, NormalizedSpell, NormalizedTransaction, Proof, SpellProverInput,
     CURRENT_VERSION,
 };
 use charms_data::{util, App, Charms, Data, Transaction, TxId, UtxoId, B32};
-use hex::FromHex;
 #[cfg(not(feature = "prover"))]
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -441,18 +440,9 @@ impl Prove for Prover {
         )
         .expect("Coudln't find finality input data json at given path!");
 
-        let btc_finality_proof_vk: [u32; 8] = <[u8; 32]>::from_hex(BTC_FINALITY_VK)
-            .expect("Invalid hex")
-            .chunks_exact(4)
-            .map(|chunk| u32::from_le_bytes(chunk.try_into().unwrap()))
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
-
         let spell_checker_prover_input = SpellCheckerProverInput {
             spell_input: prover_input,
-            finality_input,
-            finality_vk: btc_finality_proof_vk,
+            finality_input: Some(vec![NetworkFinalityProofs::Bitcoin(finality_input)]),
         };
 
         stdin.write_vec(util::write(&spell_checker_prover_input)?);

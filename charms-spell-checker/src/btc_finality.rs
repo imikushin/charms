@@ -3,7 +3,6 @@ use std::io::Cursor;
 use bitcoin::{consensus::Decodable, Block, MerkleBlock, Txid};
 use charms_client::BitcoinFinalityInput;
 use charms_data::util;
-use sha2::{Digest, Sha256};
 
 fn verify_block_inclusion(input: BitcoinFinalityInput) -> bool {
     let mut block_cursor = Cursor::new(input.block_bytes);

@@ -16,8 +16,10 @@ pub const BTC_FINALITY_BINARY: &[u8] = include_bytes!("./bin/btc-finality");
 pub const SPELL_VK: &str = "0x00de43c6a19774cbecd5fb6eb0eaad7f1d5852741bfdf91ac11217ee6fe52850";
 /// Verification key for the `btc-finality` binary.
 pub const BTC_FINALITY_VK: &str =
-    "0x00c94046701e60fb4812584e39f4a00a667313bca8fe91fe06ef0c9c0dd67dfe";
-
+    "00c94046701e60fb4812584e39f4a00a667313bca8fe91fe06ef0c9c0dd67dfe";
+pub const U32_BTC_FINALITY_VK_BYTES: [u32; 8] = [
+    0x00c94046, 0x701e60fb, 0x4812584e, 0x39f4a00a, 0x667313bc, 0xa8fe91fe, 0x06ef0c9c, 0x0dd67dfe,
+];
 #[cfg(test)]
 mod test {
     use super::*;
@@ -42,6 +44,6 @@ mod test {
 
         let (_, vk) = client.setup(BTC_FINALITY_BINARY);
         let s = vk.bytes32();
-        assert_eq!(BTC_FINALITY_VK, s.as_str());
+        assert_eq!(BTC_FINALITY_VK, s.as_str().strip_prefix("0x").unwrap());
     }
 }

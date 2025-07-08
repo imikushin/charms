@@ -302,7 +302,6 @@ pub struct BitcoinFinalityInput {
 pub struct SpellCheckerProverInput {
     pub spell_input: SpellProverInput,
     pub finality_input: Option<Vec<NetworkFinalityProofs>>,
-    pub finality_vks: [u32; 8], // TODO(snikolov): Remove
 }
 
 pub fn load_finality_input(path: &str) -> Result<BitcoinFinalityInput, Box<dyn std::error::Error>> {

@@ -277,7 +277,7 @@ pub enum UtilsCommands {
     InstallCircuitFiles,
 }
 
-pub const DEFAULT_BTC_FINALITY_PATH: &str = "./btc_inclusion_data.json";
+pub const DEFAULT_BTC_FINALITY_PATH: &str = "./btc_finality_data.json";
 
 pub async fn run() -> anyhow::Result<()> {
     utils::logger::setup_logger();

@@ -299,9 +299,11 @@ pub async fn run() -> anyhow::Result<()> {
         }
         Commands::Tx { command } => match command {
             TxCommands::ShowSpell { chain, tx, json } => tx::tx_show_spell(chain, tx, json),
-            TxCommands::FetchBitcoinProof { tx, block_root } => {
-                fetch_btc_finality_proof_input(tx, block_root, DEFAULT_BTC_FINALITY_PATH)
-            }
+            TxCommands::FetchBitcoinProof { tx, block_root } => fetch_btc_finality_proof_input(
+                tx,
+                block_root,
+                PathBuf::from(DEFAULT_BTC_FINALITY_PATH),
+            ),
         },
         Commands::App { command } => match command {
             AppCommands::New { name } => app::new(&name),

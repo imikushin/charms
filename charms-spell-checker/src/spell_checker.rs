@@ -1,7 +1,7 @@
 use crate::is_correct;
-use charms::U32_BTC_FINALITY_VK;
 use charms_client::{
-    NetworkFinalityProofs, NormalizedSpell, SpellCheckerProverInput, SpellProverInput,
+    finality::U32_BTC_FINALITY_VK, NetworkFinalityProofs, NormalizedSpell, SpellCheckerProverInput,
+    SpellProverInput,
 };
 use charms_data::util;
 use sha2::{Digest, Sha256};

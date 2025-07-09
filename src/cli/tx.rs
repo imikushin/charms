@@ -7,7 +7,7 @@ use anyhow::Result;
 use bitcoin::{consensus::encode::serialize_hex, Transaction};
 use charms_client::{bitcoin_tx::BitcoinTx, cardano_tx::CardanoTx, tx::Tx, BitcoinFinalityInput};
 use charms_data::TxId;
-use std::{fs::File, io::Write, process::Command};
+use std::{fs::File, io::Write, path::PathBuf, process::Command};
 
 pub fn tx_show_spell(chain: String, tx: String, json: bool) -> Result<()> {
     let tx = match chain.as_str() {
@@ -42,7 +42,7 @@ pub(crate) fn get_prev_txs(tx: &Transaction) -> Result<Vec<String>> {
 pub(crate) fn fetch_btc_finality_proof_input(
     tx_id: String,
     block_root: String,
-    finality_data_path: &str,
+    finality_data_path: PathBuf,
 ) -> Result<()> {
     let fetch_block = Command::new("bash")
         .args(&[

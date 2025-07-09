@@ -13,7 +13,9 @@ use anyhow::{anyhow, ensure, Error};
 use bitcoin::{hashes::Hash, Amount};
 #[cfg(not(feature = "prover"))]
 use charms_client::bitcoin_tx::BitcoinTx;
-use charms_client::{load_finality_input, tx::Tx, NetworkFinalityProofs, SpellCheckerProverInput};
+use charms_client::{
+    finality::load_finality_input, tx::Tx, NetworkFinalityProofs, SpellCheckerProverInput,
+};
 pub use charms_client::{
     to_tx, NormalizedCharms, NormalizedSpell, NormalizedTransaction, Proof, SpellProverInput,
     CURRENT_VERSION,

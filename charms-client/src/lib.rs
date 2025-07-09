@@ -10,6 +10,7 @@ use std::{
 
 pub mod bitcoin_tx;
 pub mod cardano_tx;
+pub mod finality;
 pub mod tx;
 
 pub const APP_VK: [u32; 8] = [
@@ -304,12 +305,6 @@ pub struct SpellCheckerProverInput {
     pub finality_input: Option<Vec<NetworkFinalityProofs>>,
 }
 
-pub fn load_finality_input(path: &str) -> Result<BitcoinFinalityInput, Box<dyn std::error::Error>> {
-    let file = File::open(path)?;
-    let reader = BufReader::new(file);
-    let input: BitcoinFinalityInput = serde_json::from_reader(reader)?;
-    Ok(input)
-}
 #[cfg(test)]
 mod test {
     #[test]

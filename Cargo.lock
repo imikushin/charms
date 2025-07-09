@@ -1027,6 +1027,7 @@ version = "0.7.0"
 dependencies = [
  "anyhow",
  "ark-bls12-381",
+ "ark-ec",
  "ark-ff 0.5.0",
  "ark-groth16",
  "ark-relations",
@@ -1096,7 +1097,10 @@ version = "0.7.0"
 dependencies = [
  "anyhow",
  "ark-bls12-381",
+ "ark-ff 0.5.0",
  "ark-groth16",
+ "ark-serialize 0.5.0",
+ "ark-snark",
  "bitcoin",
  "charms-data",
  "ciborium",

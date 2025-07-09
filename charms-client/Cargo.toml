@@ -10,7 +10,10 @@ license.workspace = true
 [dependencies]
 anyhow = { workspace = true }
 ark-bls12-381 = { workspace = true }
+ark-ff = { workspace = true }
 ark-groth16 = { workspace = true }
+ark-serialize = { workspace = true }
+ark-snark = { workspace = true }
 bitcoin = { workspace = true, features = ["serde"] }
 charms-data = { path = "../charms-data", version = "0.7.0" }
 cml-chain = { workspace = true }

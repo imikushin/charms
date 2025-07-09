@@ -12,12 +12,16 @@ use crate::{
 };
 use anyhow::{anyhow, ensure, Error};
 use ark_bls12_381::{fr::Fr, Bls12_381};
-use ark_ff::Field;
-use ark_groth16::Groth16;
-use ark_relations::r1cs::{
-    ConstraintSynthesizer, ConstraintSystem, ConstraintSystemRef, SynthesisError,
+use ark_ec::pairing::Pairing;
+use ark_ff::{Field, ToConstraintField};
+use ark_groth16::{Groth16, ProvingKey};
+use ark_relations::{
+    lc, r1cs,
+    r1cs::{
+        ConstraintSynthesizer, ConstraintSystem, ConstraintSystemRef, SynthesisError, Variable::One,
+    },
 };
-use ark_serialize::CanonicalSerialize;
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_snark::{CircuitSpecificSetupSNARK, SNARK};
 use ark_std::{
     rand::{RngCore, SeedableRng},
@@ -37,6 +41,7 @@ use charms_data::{util, App, Charms, Data, Transaction, TxId, UtxoId, B32};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_with::{base64::Base64, serde_as, IfIsHumanReadable};
+use sha2::{Digest, Sha256};
 use sp1_sdk::{SP1ProofMode, SP1Stdin};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -452,16 +457,17 @@ impl Prove for Prover {
         // TODO move this out of here and replace with good randomness
         let mut rng = ark_std::rand::rngs::StdRng::seed_from_u64(test_rng().next_u64());
 
-        eprintln!("Creating parameters...");
-
         // Create parameters for our circuit
-        let (pk, vk) = {
-            let c = DummyCircuit::<Fr>::default();
+        let pk = load_pk()?;
 
-            Groth16::<Bls12_381>::setup(c, &mut rng)
-        }?;
+        let committed_data = util::write(&(SPELL_VK, norm_spell.clone()))?;
 
-        let circuit = DummyCircuit::<Fr>::default();
+        let field_elements = Sha256::digest(&committed_data)
+            .to_field_elements()
+            .expect("non-empty vector");
+        let circuit = DummyCircuit {
+            a: Some(field_elements[0]),
+        };
 
         let proof = Groth16::<Bls12_381>::prove(&pk, circuit, &mut rng)?;
         let mut proof_bytes = vec![];
@@ -477,14 +483,29 @@ impl Prove for Prover {
     }
 }
 
-#[derive(Default)]
-pub struct DummyCircuit<F: Field> {
-    pub _dummy: PhantomData<F>,
+fn load_pk<E: Pairing>() -> anyhow::Result<ProvingKey<E>> {
+    ProvingKey::deserialize_compressed(MOCK_GROTH16_PK)
+        .map_err(|e| anyhow!("Failed to deserialize proving key: {}", e))
 }
 
-impl<F: Field> ConstraintSynthesizer<F> for DummyCircuit<F> {
-    fn generate_constraints(self, cs: ConstraintSystemRef<F>) -> ark_relations::r1cs::Result<()> {
-        todo!()
+const MOCK_GROTH16_PK: &[u8] = include_bytes!("./bin/mock-groth16-pk.bin");
+
+#[derive(Default)]
+pub struct DummyCircuit<F>
+where
+    F: Field,
+{
+    a: Option<F>,
+}
+
+impl<ConstraintF> ConstraintSynthesizer<ConstraintF> for DummyCircuit<ConstraintF>
+where
+    ConstraintF: Field,
+{
+    fn generate_constraints(self, cs: ConstraintSystemRef<ConstraintF>) -> r1cs::Result<()> {
+        let a = cs.new_witness_variable(|| self.a.ok_or(SynthesisError::AssignmentMissing))?;
+        let c = cs.new_input_variable(|| self.a.ok_or(SynthesisError::AssignmentMissing))?;
+        cs.enforce_constraint(lc!() + a, lc!() + One, lc!() + c)
     }
 }
 

@@ -100,7 +100,7 @@ pub const V1_GROTH16_VK_BYTES: &'static [u8] = include_bytes!("../vk/v1/groth16_
 pub const V2_GROTH16_VK_BYTES: &'static [u8] = V1_GROTH16_VK_BYTES;
 pub const V3_GROTH16_VK_BYTES: &'static [u8] = V1_GROTH16_VK_BYTES;
 pub const V4_GROTH16_VK_BYTES: &'static [u8] = include_bytes!("../vk/v4/groth16_vk.bin");
-pub const V5_GROTH16_VK_BYTES: &'static [u8] = V4_GROTH16_VK_BYTES;
+pub const V5_GROTH16_VK_BYTES: &'static [u8] = include_bytes!("../vk/v5/mock-groth16-vk.bin");
 pub const CURRENT_GROTH16_VK_BYTES: &'static [u8] = V5_GROTH16_VK_BYTES;
 
 pub fn to_serialized_pv<T: Serialize>(spell_version: u32, t: &T) -> Vec<u8> {
@@ -132,7 +132,7 @@ pub fn verify_snark_proof(
             Groth16Verifier::verify(proof, public_inputs, vk_hash, groth16_vk)
                 .map_err(|e| anyhow!("could not verify spell proof: {}", e))
         }
-        CURRENT_VERSION => ark::verify_groth16_proof(proof, public_inputs, vk_hash, spell_version),
+        CURRENT_VERSION => ark::verify_groth16_proof(proof, public_inputs, spell_version),
         _ => bail!("unsupported spell version: {}", spell_version),
     }
 }

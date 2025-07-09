@@ -1,8 +1,7 @@
 use crate::{
     app,
     tx::{bitcoin_tx, txs_by_txid},
-    utils,
-    utils::{BoxedSP1Prover, Shared},
+    utils::{self, BoxedSP1Prover, Shared},
     SPELL_CHECKER_BINARY, SPELL_VK,
 };
 #[cfg(feature = "prover")]
@@ -14,7 +13,9 @@ use anyhow::{anyhow, ensure, Error};
 use bitcoin::{hashes::Hash, Amount};
 #[cfg(not(feature = "prover"))]
 use charms_client::bitcoin_tx::BitcoinTx;
-use charms_client::tx::Tx;
+use charms_client::{
+    finality::load_finality_input, tx::Tx, NetworkFinalityProofs, SpellCheckerProverInput,
+};
 pub use charms_client::{
     to_tx, NormalizedCharms, NormalizedSpell, NormalizedTransaction, Proof, SpellProverInput,
     CURRENT_VERSION,
@@ -364,6 +365,8 @@ pub trait Prove {
     ///   and associated `Data` values.
     /// - `prev_txs`: A list of previous transactions (`Tx`) that have created the outputs consumed
     ///   by the spell.
+    /// - `finality_proof_data_path` - A path containing json formatted data for the finality proof
+    ///   of the beamed charms. Can be `None` if no beaming is required.
     /// - `tx_ins_beamed_source_utxos`: A mapping of input UTXOs to their beaming source UTXOs (if
     ///   the input UTXO has been beamed from another chain).
     /// - `expected_cycles`: An optional vector of cycles (`u64`) that represents the desired
@@ -391,6 +394,7 @@ pub trait Prove {
         app_binaries: BTreeMap<B32, Vec<u8>>,
         app_private_inputs: BTreeMap<App, Data>,
         prev_txs: Vec<Tx>,
+        finality_proof_data_path: Option<String>,
         tx_ins_beamed_source_utxos: BTreeMap<UtxoId, UtxoId>,
     ) -> anyhow::Result<(NormalizedSpell, Proof, u64)>;
 }
@@ -402,6 +406,7 @@ impl Prove for Prover {
         app_binaries: BTreeMap<B32, Vec<u8>>,
         app_private_inputs: BTreeMap<App, Data>,
         prev_txs: Vec<Tx>,
+        finality_proof_data_path: Option<String>,
         tx_ins_beamed_source_utxos: BTreeMap<UtxoId, UtxoId>,
     ) -> anyhow::Result<(NormalizedSpell, Proof, u64)> {
         let mut stdin = SP1Stdin::new();
@@ -430,7 +435,19 @@ impl Prove for Prover {
             app_prover_output,
         };
 
-        stdin.write_vec(util::write(&prover_input)?);
+        let finality_input = load_finality_input(
+            finality_proof_data_path
+                .expect("Finality proof data path should be provided")
+                .as_str(),
+        )
+        .expect("Coudln't find finality input data json at given path!");
+
+        let spell_checker_prover_input = SpellCheckerProverInput {
+            spell_input: prover_input,
+            finality_input: Some(vec![NetworkFinalityProofs::Bitcoin(finality_input)]),
+        };
+
+        stdin.write_vec(util::write(&spell_checker_prover_input)?);
 
         let (pk, _) = self.prover_client.get().setup(SPELL_CHECKER_BINARY);
         let (proof, spell_cycles) =

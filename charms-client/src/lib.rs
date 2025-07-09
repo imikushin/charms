@@ -6,6 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 pub mod bitcoin_tx;
 pub mod cardano_tx;
+pub mod finality;
 pub mod tx;
 
 pub const APP_VK: [u32; 8] = [
@@ -42,6 +43,15 @@ pub const CURRENT_VERSION: u32 = V5;
 /// Maps the index of the charm's app (in [`NormalizedSpell`].`app_public_inputs`) to the charm's
 /// data.
 pub type NormalizedCharms = BTreeMap<u32, Data>;
+
+/// Enum defining networks which support beaming charms, via finality proofs
+/// executed through a finality binary for each respective network - this is
+/// recursivelly verified in the `charms-spell-checker`binary
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "network", content = "data")]
+pub enum NetworkFinalityProofs {
+    Bitcoin(BitcoinFinalityInput),
+}
 
 /// Normalized representation of a Charms transaction.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -277,6 +287,19 @@ pub struct AppProverOutput {
     pub tx: Transaction,
     pub app_public_inputs: BTreeMap<App, Data>,
     pub cycles: Vec<u64>,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+pub struct BitcoinFinalityInput {
+    pub expected_tx: TxId,
+    pub pmt_proof: Vec<u8>,
+    pub block_bytes: Vec<u8>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SpellCheckerProverInput {
+    pub spell_input: SpellProverInput,
+    pub finality_input: Option<Vec<NetworkFinalityProofs>>,
 }
 
 #[cfg(test)]

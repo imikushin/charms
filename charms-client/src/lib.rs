@@ -48,6 +48,7 @@ pub type NormalizedCharms = BTreeMap<u32, Data>;
 /// executed through a finality binary for each respective network - this is
 /// recursivelly verified in the `charms-spell-checker`binary
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "network", content = "data")]
 pub enum NetworkFinalityProofs {
     Bitcoin(BitcoinFinalityInput),
 }

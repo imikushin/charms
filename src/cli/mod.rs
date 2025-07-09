@@ -10,7 +10,7 @@ use crate::{
     cli::{
         server::Server,
         spell::{Check, Prove, SpellCli},
-        tx::fetch_btc_finality_proof_input,
+        tx::{fetch_btc_finality_proof_input, write_object_as_json},
         wallet::{List, WalletCli},
     },
     spell::{CharmsFee, Prover},
@@ -180,6 +180,7 @@ pub enum SpellCommands {
 }
 
 #[derive(Subcommand)]
+#[command(rename_all = "kebab-case")]
 pub enum TxCommands {
     /// Show the spell in a transaction. If the transaction has a spell and its valid proof, it
     /// will be printed to stdout.
@@ -195,8 +196,14 @@ pub enum TxCommands {
         #[arg(long)]
         json: bool,
     },
-    FetchBitcoinProof {
+    #[command(name = "fetch-btc-finality")]
+    FetchBitcoinFinalityData {
+        // TxId of expected transaction
+        #[arg(long)]
         tx: String,
+
+        // Block Root hex in which expected transaction is mined
+        #[arg(long)]
         block_root: String,
     },
 }
@@ -299,11 +306,12 @@ pub async fn run() -> anyhow::Result<()> {
         }
         Commands::Tx { command } => match command {
             TxCommands::ShowSpell { chain, tx, json } => tx::tx_show_spell(chain, tx, json),
-            TxCommands::FetchBitcoinProof { tx, block_root } => fetch_btc_finality_proof_input(
-                tx,
-                block_root,
-                PathBuf::from(DEFAULT_BTC_FINALITY_PATH),
-            ),
+            TxCommands::FetchBitcoinFinalityData { tx, block_root } => {
+                let btc_data = fetch_btc_finality_proof_input(tx, block_root)?;
+                write_object_as_json(btc_data, PathBuf::from(DEFAULT_BTC_FINALITY_PATH))?;
+
+                Ok(())
+            }
         },
         Commands::App { command } => match command {
             AppCommands::New { name } => app::new(&name),
@@ -490,6 +498,32 @@ fn print_output<T: Serialize>(output: &T, json: bool) -> anyhow::Result<()> {
 
 #[cfg(test)]
 mod test {
+    use crate::cli::{tx::fetch_btc_finality_proof_input, TxCommands};
+
     #[test]
     fn dummy() {}
+
+    #[test]
+    fn test_fetch_btc_finality_command() {
+        // Given values exist in testnet
+        let tx_id = "75905e70f660f19c7a785edd9ce4a7a3ff837d948e32977607ee090ea908f37b".to_string();
+        let block_root =
+            "00000000000000000366c11e195318fd96ccce10b527c46560f9aa325f9e4bee".to_string();
+
+        let cmd = TxCommands::FetchBitcoinFinalityData {
+            tx: tx_id.clone(),
+            block_root: block_root.clone(),
+        };
+
+        match cmd {
+            TxCommands::FetchBitcoinFinalityData { tx, block_root } => {
+                let result = fetch_btc_finality_proof_input(tx, block_root);
+                assert!(
+                    result.is_ok(),
+                    "Expected success from fetch_btc_inclusion_proof_input"
+                );
+            }
+            _ => panic!("Expected FetchBitcoinFinalityData variant"),
+        }
+    }
 }

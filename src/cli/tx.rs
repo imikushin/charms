@@ -7,6 +7,7 @@ use anyhow::Result;
 use bitcoin::{consensus::encode::serialize_hex, Transaction};
 use charms_client::{bitcoin_tx::BitcoinTx, cardano_tx::CardanoTx, tx::Tx, BitcoinFinalityInput};
 use charms_data::TxId;
+use serde::Serialize;
 use std::{fs::File, io::Write, path::PathBuf, process::Command};
 
 pub fn tx_show_spell(chain: String, tx: String, json: bool) -> Result<()> {
@@ -20,6 +21,15 @@ pub fn tx_show_spell(chain: String, tx: String, json: bool) -> Result<()> {
         Some(spell) => cli::print_output(&spell, json)?,
         None => eprintln!("No spell found in the transaction"),
     }
+
+    Ok(())
+}
+
+/// Writes any serializable object to json file
+pub(crate) fn write_object_as_json<T: Serialize>(data: T, path: PathBuf) -> Result<()> {
+    let json = serde_json::to_string_pretty(&data)?;
+    let mut file = File::create(path)?;
+    file.write_all(json.as_bytes())?;
 
     Ok(())
 }
@@ -42,8 +52,7 @@ pub(crate) fn get_prev_txs(tx: &Transaction) -> Result<Vec<String>> {
 pub(crate) fn fetch_btc_finality_proof_input(
     tx_id: String,
     block_root: String,
-    finality_data_path: PathBuf,
-) -> Result<()> {
+) -> Result<BitcoinFinalityInput> {
     let fetch_block = Command::new("bash")
         .args(&[
             "-c",
@@ -62,16 +71,9 @@ pub(crate) fn fetch_btc_finality_proof_input(
 
     let txoutproof = String::from_utf8(fetch_txoutproof.stdout).expect("Coudln't fetch block!");
 
-    let btc_finality_data = BitcoinFinalityInput {
+    Ok(BitcoinFinalityInput {
         expected_tx: TxId::from_str(tx_id.as_str()).expect("Failed parsing TxId"),
         pmt_proof: txoutproof.as_bytes().to_vec(),
         block_bytes: block.as_bytes().to_vec(),
-    };
-
-    // Write to json file
-    let json = serde_json::to_string_pretty(&btc_finality_data)?;
-    let mut file = File::create(finality_data_path)?;
-    file.write_all(json.as_bytes())?;
-
-    Ok(())
+    })
 }

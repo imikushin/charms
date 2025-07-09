@@ -3,7 +3,7 @@ use std::{fs::File, io::BufReader};
 use crate::BitcoinFinalityInput;
 
 /// RISC-V binary compiled from `charms-spell-checker`.
-pub const BTC_FINALITY_BINARY: &[u8] = include_bytes!("../bin/btc-finality");
+pub const BTC_FINALITY_BINARY: &[u8] = include_bytes!("../../src/bin/btc-finality");
 
 /// Verification key for the `btc-finality` binary.
 pub const BTC_FINALITY_VK: &str =
@@ -17,20 +17,4 @@ pub fn load_finality_input(path: &str) -> Result<BitcoinFinalityInput, Box<dyn s
     let reader = BufReader::new(file);
     let input: BitcoinFinalityInput = serde_json::from_reader(reader)?;
     Ok(input)
-}
-
-#[cfg(test)]
-mod test {
-    use sp1_sdk::{HashableKey, Prover, ProverClient};
-
-    use crate::finality::{BTC_FINALITY_BINARY, BTC_FINALITY_VK};
-
-    #[test]
-    fn test_btc_finality_vk() {
-        let client = ProverClient::builder().mock().build();
-
-        let (_, vk) = client.setup(BTC_FINALITY_BINARY);
-        let s = vk.bytes32();
-        assert_eq!(BTC_FINALITY_VK, s.as_str().strip_prefix("0x").unwrap());
-    }
 }

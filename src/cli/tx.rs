@@ -5,8 +5,10 @@ use crate::{
 };
 use anyhow::Result;
 use bitcoin::{consensus::encode::serialize_hex, Transaction};
-use charms_client::{bitcoin_tx::BitcoinTx, cardano_tx::CardanoTx, tx::Tx};
-use std::process::Command;
+use charms_client::{bitcoin_tx::BitcoinTx, cardano_tx::CardanoTx, tx::Tx, BitcoinFinalityInput};
+use charms_data::TxId;
+use serde::Serialize;
+use std::{fs::File, io::Write, path::PathBuf, process::Command};
 
 pub fn tx_show_spell(chain: String, tx: String, json: bool) -> Result<()> {
     let tx = match chain.as_str() {

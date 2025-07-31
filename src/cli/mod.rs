@@ -13,10 +13,10 @@ use crate::{
         wallet::{List, WalletCli},
     },
     spell::{CharmsFee, Prover},
-    utils,
-    utils::{BoxedSP1Prover, Shared},
+    utils::{self, BoxedSP1Prover, Shared},
 };
 use bitcoin::{address::NetworkUnchecked, Address};
+use btc_finality::{prove_consensus, prove_tx_inclusion};
 use charms_app_runner::AppRunner;
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use clap_complete::{generate, Shell};
@@ -180,6 +180,7 @@ pub enum SpellCommands {
 }
 
 #[derive(Subcommand)]
+#[command(rename_all = "kebab-case")]
 pub enum TxCommands {
     /// Show the spell in a transaction. If the transaction has a spell and its valid proof, it
     /// will be printed to stdout.
@@ -194,6 +195,30 @@ pub enum TxCommands {
         /// Output in JSON format (default is YAML).
         #[arg(long)]
         json: bool,
+    },
+    #[command(name = "prove-btc-consensus")]
+    ProveBitcoinConsensus {
+        // Path to previous proof (if not genesis case)
+        #[arg(long)]
+        previous_proof: Option<String>,
+
+        // Number of headers to validate after previous block
+        #[arg(long)]
+        block_height: u32,
+    },
+    #[command(name = "prove-btc-inclusion")]
+    ProveBitcoinInclusion {
+        // TxId included in given block root
+        #[arg(long)]
+        tx: String,
+
+        // Consensus proof at given block root
+        #[arg(long)]
+        consensus_proof: String,
+
+        // Height at given block root
+        #[arg(long)]
+        block_height: u32,
     },
 }
 
@@ -273,6 +298,8 @@ pub enum UtilsCommands {
     InstallCircuitFiles,
 }
 
+pub const DEFAULT_BTC_FINALITY_PATH: &str = "./btc_finality_data.json";
+
 pub async fn run() -> anyhow::Result<()> {
     utils::logger::setup_logger();
 
@@ -293,6 +320,15 @@ pub async fn run() -> anyhow::Result<()> {
         }
         Commands::Tx { command } => match command {
             TxCommands::ShowSpell { chain, tx, json } => tx::tx_show_spell(chain, tx, json),
+            TxCommands::ProveBitcoinConsensus {
+                previous_proof,
+                block_height,
+            } => prove_consensus(previous_proof, block_height),
+            TxCommands::ProveBitcoinInclusion {
+                tx,
+                consensus_proof,
+                block_height,
+            } => prove_tx_inclusion(tx, consensus_proof, block_height),
         },
         Commands::App { command } => match command {
             AppCommands::New { name } => app::new(&name),
@@ -479,6 +515,7 @@ fn print_output<T: Serialize>(output: &T, json: bool) -> anyhow::Result<()> {
 
 #[cfg(test)]
 mod test {
+
     #[test]
     fn dummy() {}
 }

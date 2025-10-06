@@ -1,11 +1,9 @@
-pub mod bin;
-
 use charms_client::{NormalizedSpell, tx::Tx};
 use charms_data::{AppInput, Transaction, UtxoId, check, is_simple_transfer};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Check if the spell is correct.
-pub(crate) fn is_correct(
+pub fn is_correct(
     spell: &NormalizedSpell,
     prev_txs: &Vec<Tx>,
     app_input: Option<AppInput>,
@@ -21,7 +19,7 @@ pub(crate) fn is_correct(
     ));
 
     let Some(prev_txids) = spell.tx.prev_txids() else {
-        unreachable!("the spell is well formed: tx.ins MUST be Some");
+        unreachable!("the spell is not well-formed: `tx.ins` MUST be Some");
     };
     let all_prev_txids: BTreeSet<_> = tx_ins_beamed_source_utxos
         .values()

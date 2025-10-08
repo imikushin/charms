@@ -1,7 +1,7 @@
 use charms_client::{NormalizedSpell, SpellProverInput};
 use charms_data::util;
 use charms_spell_checker::is_correct;
-use std::io::{Read, Write};
+use std::io::Write;
 
 pub fn main() {
     // Read an input to the program.

@@ -44,24 +44,24 @@ ciborium-io = { version = "0.2.2" }
 cml-chain = { version = "6.2.0", default-features = false }
 cml-core = { version = "6.2.0", default-features = false }
 hex = { version = "0.4.3" }
-pallas-addresses = { version = "0.34.0" }
-pallas-codec = { version = "0.34.0" }
-pallas-crypto = { version = "0.34.0" }
-pallas-primitives = { version = "0.34.0" }
-pallas-txbuilder = { version = "0.34.0" }
+pallas-addresses = { version = "0.35.0" }
+pallas-codec = { version = "0.35.0" }
+pallas-crypto = { version = "0.35.0" }
+pallas-primitives = { version = "0.35.0" }
+pallas-txbuilder = { version = "0.35.0" }
 proptest = { version = "1.10.0" }
-proptest-derive = { version = "0.5.1" }
+proptest-derive = { version = "0.8.0" }
 serde = { version = "1.0" }
 serde_json = { version = "1.0.149" }
 serde_yaml = { version = "0.9.34" }
 sha2 = { version = "0.10.9" }
-sp1-core-machine = { version = "5.2.4" }
-sp1-cuda = { version = "5.2.4" }
-sp1-primitives = { version = "5.2.4" }
-sp1-prover = { version = "5.2.4" }
-sp1-sdk = { version = "5.2.4", default-features = false, features = ["network"] }
-sp1-verifier = { version = "5.2.4" }
-sp1-zkvm = { version = "5.2.4" }
+sp1-core-machine = { version = "6.0.1" }
+sp1-cuda = { version = "6.0.1" }
+sp1-primitives = { version = "6.0.1" }
+sp1-prover = { version = "6.0.1" }
+sp1-sdk = { version = "6.0.1", default-features = false, features = ["network"] }
+sp1-verifier = { version = "6.0.1" }
+sp1-zkvm = { version = "6.0.1" }
 test-strategy = { version = "0.4.5" }
 tracing = { version = "0.1" }
 
@@ -97,15 +97,15 @@ cml-core = { workspace = true }
 const_format = { version = "0.2.35" }
 hex = { workspace = true }
 hex-literal = { version = "1.1.0" }
-ic-agent = { version = "0.38" }
+ic-agent = { version = "0.45" }
 pallas-addresses = { workspace = true }
 pallas-codec = { workspace = true }
 pallas-crypto = { workspace = true }
 pallas-primitives = { workspace = true }
 pallas-txbuilder = { workspace = true }
-redis = { version = "0.32.7", optional = true, features = ["tokio-rustls-comp"] }
-redis-macros = { version = "0.5.6" }
-reqwest = { version = "0.12.28", features = ["json"] }
+redis = { version = "1.0.4", optional = true, features = ["tokio-rustls-comp"] }
+redis-macros = { version = "1.0.1" }
+reqwest = { version = "0.13.2", features = ["json"] }
 rslock = { version = "0.7.4", optional = true, features = ["tokio-comp"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
@@ -117,10 +117,10 @@ sp1-cuda = { workspace = true }
 sp1-prover = { workspace = true }
 sp1-sdk = { workspace = true }
 tokio = { version = "1.49", features = ["full"] }
-toml = { version = "0.8.23" }
+toml = { version = "1.0.3" }
 tower-http = { version = "0.6.8", features = ["cors"] }
 tracing = { workspace = true }
-tracing-forest = { version = "0.1.6" }
+tracing-forest = { version = "0.3.1" }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 twirp = { package = "twirp-rs", version = "0.13.0-succinct" }
 
@@ -141,4 +141,4 @@ overflow-checks = true
 panic = "abort"
 
 [patch.crates-io]
-sha2 = { git = "https://github.com/sp1-patches/RustCrypto-hashes", package = "sha2", tag = "patch-sha2-0.10.9-sp1-4.0.0" }
+sha2 = { git = "https://github.com/sp1-patches/RustCrypto-hashes", package = "sha2", tag = "patch-sha2-0.10.9-sp1-6.0.0" }

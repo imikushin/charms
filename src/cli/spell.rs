@@ -1,11 +1,14 @@
+#[cfg(target_arch = "wasm32")]
+use crate::spell::from_strings;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::spell::{
+    ProveSpellTx, ProveSpellTxImpl, adjust_coin_contents, ensure_all_prev_txs_are_present,
+    ensure_exact_app_binaries, from_strings,
+};
 use crate::{
     cli,
     cli::{Output, SpellCheckParams, SpellProveParams},
-    spell::{
-        NormalizedSpell, ProveRequest, ProveSpellTx, ProveSpellTxImpl, adjust_coin_contents,
-        ensure_all_prev_txs_are_present, ensure_exact_app_binaries, from_strings,
-        read_private_inputs,
-    },
+    spell::{NormalizedSpell, ProveRequest, read_private_inputs},
 };
 use anyhow::{Result, ensure};
 use charms_app_runner::AppRunner;
@@ -55,6 +58,7 @@ impl SpellCli {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl Prove for SpellCli {
     async fn prove(&self, params: SpellProveParams) -> Result<()> {
         let SpellProveParams {
@@ -169,6 +173,14 @@ impl Prove for SpellCli {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
+impl Prove for SpellCli {
+    async fn prove(&self, _params: SpellProveParams) -> Result<()> {
+        anyhow::bail!("the `spell prove` command is not yet available in WASM builds")
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 impl Check for SpellCli {
     #[tracing::instrument(level = "debug", skip(self, spell, app_bins))]
     fn check(
@@ -248,5 +260,12 @@ impl Check for SpellCli {
         eprintln!("cycles spent: {:?}", cycles_spent);
 
         Ok(())
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+impl Check for SpellCli {
+    fn check(&self, _params: SpellCheckParams) -> Result<()> {
+        anyhow::bail!("the `spell check` command is not yet available in WASM builds")
     }
 }

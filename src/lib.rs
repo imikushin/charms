@@ -1,5 +1,7 @@
+#[cfg(not(target_arch = "wasm32"))]
 pub mod app;
 pub mod cli;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod script;
 pub mod spell;
 pub mod tx;

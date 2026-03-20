@@ -1,19 +1,24 @@
+#[cfg(not(target_arch = "wasm32"))]
 use prover::CharmsSP1Prover;
 use std::{
     fmt::Debug,
     sync::OnceLock,
     time::{Duration, Instant},
 };
-use tokio::{sync::OnceCell, task::block_in_place};
+use tokio::sync::OnceCell;
+#[cfg(not(target_arch = "wasm32"))]
+use tokio::task::block_in_place;
 
 pub(crate) mod logger;
 pub mod pool;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod prover;
 #[cfg(feature = "prover")]
 pub(crate) mod sp1;
 
 pub const TRANSIENT_PROVER_FAILURE: &str = " transient prover failure:";
 
+#[cfg(not(target_arch = "wasm32"))]
 pub type BoxedSP1Prover = Box<dyn CharmsSP1Prover>;
 
 /// Create a string representation of the index `i` in the format `$xxxx`.
@@ -87,6 +92,7 @@ where
 /// runtime.
 ///
 /// (borrowed from Succinct's SP1)
+#[cfg(not(target_arch = "wasm32"))]
 pub fn block_on<T>(fut: impl Future<Output = T>) -> T {
     // Handle case if we're already in an tokio runtime.
     if let Ok(handle) = tokio::runtime::Handle::try_current() {

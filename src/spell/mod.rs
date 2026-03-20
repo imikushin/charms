@@ -1,12 +1,18 @@
+#[cfg(not(target_arch = "wasm32"))]
 pub mod prove;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod prove_spell_tx;
 pub mod request;
+#[cfg(not(target_arch = "wasm32"))]
 mod validate;
 
 // Re-export public API to preserve existing `crate::spell::*` imports.
+#[cfg(not(target_arch = "wasm32"))]
 pub use prove::{MockProver, Prove, Prover};
+#[cfg(not(target_arch = "wasm32"))]
 pub use prove_spell_tx::{ProveSpellTx, ProveSpellTxImpl, committed_data_hash};
 pub use request::{CharmsFee, FeeAddressForNetwork, ProveRequest};
+#[cfg(not(target_arch = "wasm32"))]
 pub use validate::{
     adjust_coin_contents, ensure_all_prev_txs_are_present, ensure_exact_app_binaries,
 };

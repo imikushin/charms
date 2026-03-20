@@ -1,6 +1,8 @@
 use std::sync::Once;
 
+#[cfg(not(target_arch = "wasm32"))]
 use tracing_forest::ForestLayer;
+#[cfg(not(target_arch = "wasm32"))]
 use tracing_subscriber::{
     EnvFilter, Registry, fmt::format::FmtSpan, layer::SubscriberExt, util::SubscriberInitExt,
 };
@@ -10,6 +12,7 @@ static INIT: Once = Once::new();
 /// A simple logger.
 ///
 /// Set the `RUST_LOG` environment variable to be set to `info` or `debug`.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn setup_logger() {
     INIT.call_once(|| {
         let default_filter = "off";
@@ -54,4 +57,9 @@ pub fn setup_logger() {
             }
         }
     });
+}
+
+#[cfg(target_arch = "wasm32")]
+pub fn setup_logger() {
+    // No-op on WASM: tracing-subscriber and tracing-forest are not available.
 }

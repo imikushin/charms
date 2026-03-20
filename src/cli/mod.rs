@@ -1,10 +1,12 @@
 pub mod app;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod server;
 pub mod spell;
 pub mod tx;
 pub mod util;
 pub mod wallet;
 
+#[cfg(not(target_arch = "wasm32"))]
 use crate::{
     cli::{
         server::Server,
@@ -14,6 +16,14 @@ use crate::{
     spell::{CharmsFee, MockProver, ProveSpellTx, ProveSpellTxImpl},
     utils,
     utils::BoxedSP1Prover,
+};
+#[cfg(target_arch = "wasm32")]
+use crate::{
+    cli::{
+        spell::{Check, Prove, SpellCli},
+        wallet::{List, WalletCli},
+    },
+    utils,
 };
 #[cfg(feature = "prover")]
 use crate::{
@@ -27,6 +37,7 @@ use charms_data::{App, check};
 use clap::{Args, CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{CompleteEnv, Shell, generate};
 use serde::Serialize;
+#[cfg(not(target_arch = "wasm32"))]
 use sp1_sdk::{CpuProver, NetworkProver, ProverClient, install::try_install_circuit_artifacts};
 use std::{io, net::IpAddr, path::PathBuf, str::FromStr, sync::Arc};
 
@@ -156,7 +167,13 @@ pub struct SpellProveParams {
     payload: bool,
 
     /// Output format for payload (JSON or CBOR).
-    #[arg(long, short = 'o', default_value = "json", value_enum, requires = "payload")]
+    #[arg(
+        long,
+        short = 'o',
+        default_value = "json",
+        value_enum,
+        requires = "payload"
+    )]
     output: Output,
 
     /// Path to the private inputs file (YAML or JSON).
@@ -399,8 +416,16 @@ pub async fn run() -> anyhow::Result<()> {
 
     match cli.command {
         Commands::Server(server_config) => {
-            let server = server(server_config);
-            server.serve().await
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let server = server(server_config);
+                server.serve().await
+            }
+            #[cfg(target_arch = "wasm32")]
+            {
+                let _ = server_config;
+                anyhow::bail!("the `server` command is not available in WASM builds")
+            }
         }
         Commands::Spell { command } => {
             let spell_cli = spell_cli();
@@ -427,7 +452,16 @@ pub async fn run() -> anyhow::Result<()> {
         Commands::Completions { shell } => generate_completions(shell),
         Commands::Util { command } => match command {
             UtilCommands::InstallCircuitFiles => {
-                let _ = try_install_circuit_artifacts("groth16");
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    let _ = try_install_circuit_artifacts("groth16");
+                }
+                #[cfg(target_arch = "wasm32")]
+                {
+                    anyhow::bail!(
+                        "the `util install-circuit-files` command is not available in WASM builds"
+                    );
+                }
                 Ok(())
             }
             UtilCommands::Dest(params) => util::dest(params),
@@ -435,11 +469,13 @@ pub async fn run() -> anyhow::Result<()> {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn server(server_config: ServerConfig) -> Server {
     let prover = ProveSpellTxImpl::new(false);
     Server::new(server_config, prover)
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub fn prove_impl(mock: bool) -> Box<dyn crate::spell::Prove> {
     tracing::debug!(mock);
     #[cfg(feature = "prover")]
@@ -464,6 +500,7 @@ pub fn prove_impl(mock: bool) -> Box<dyn crate::spell::Prove> {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn charms_fee_settings() -> Option<CharmsFee> {
     let fee_settings_file = std::env::var("CHARMS_FEE_SETTINGS").ok()?;
     let fee_settings: CharmsFee = serde_yaml::from_reader(
@@ -497,12 +534,14 @@ fn spell_cli() -> SpellCli {
     spell_cli
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[cfg(feature = "prover")]
 fn app_sp1_client() -> BoxedSP1Prover {
     let name = std::env::var("APP_SP1_PROVER").unwrap_or_default();
     sp1_named_env_client(name.as_str())
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[cfg(feature = "prover")]
 fn spell_sp1_client(app_sp1_client: &Arc<Shared<BoxedSP1Prover>>) -> Arc<Shared<BoxedSP1Prover>> {
     let name = std::env::var("SPELL_SP1_PROVER").unwrap_or_default();
@@ -513,6 +552,7 @@ fn spell_sp1_client(app_sp1_client: &Arc<Shared<BoxedSP1Prover>>) -> Arc<Shared<
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[tracing::instrument(level = "info")]
 #[cfg(feature = "prover")]
 fn charms_sp1_cuda_prover() -> utils::sp1::CudaProver {
@@ -522,26 +562,31 @@ fn charms_sp1_cuda_prover() -> utils::sp1::CudaProver {
     )
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[cfg(feature = "prover")]
 fn gpu_service_url() -> String {
     std::env::var("SP1_GPU_SERVICE_URL").unwrap_or("http://localhost:3000/twirp/".to_string())
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[tracing::instrument(level = "info")]
 pub fn sp1_cpu_prover() -> CpuProver {
     ProverClient::builder().cpu().build()
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[tracing::instrument(level = "info")]
 pub fn sp1_network_prover() -> NetworkProver {
     ProverClient::builder().network().build()
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[tracing::instrument(level = "info")]
 pub fn sp1_network_client() -> BoxedSP1Prover {
     sp1_named_env_client("network")
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[tracing::instrument(level = "debug")]
 fn sp1_named_env_client(name: &str) -> BoxedSP1Prover {
     let sp1_prover_env_var = std::env::var("SP1_PROVER").unwrap_or_default();

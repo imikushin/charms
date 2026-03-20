@@ -1,5 +1,6 @@
 use crate::spell::CharmsFee;
 use anyhow::{Context, Error, anyhow, bail};
+#[cfg(not(target_arch = "wasm32"))]
 use candid::{Decode, Encode, Principal};
 use charms_client::{
     NormalizedSpell, beamed_out_to_hash,
@@ -16,6 +17,7 @@ use cml_chain::{
 };
 use cml_core::serialization::RawBytesEncoding;
 use hex_literal::hex;
+#[cfg(not(target_arch = "wasm32"))]
 use ic_agent::Agent;
 use pallas_codec::minicbor;
 use pallas_primitives::conway::{
@@ -70,6 +72,7 @@ fn load_protocol_params() -> ProtocolParams {
 }
 
 /// Call ICP canister to sign the transaction
+#[cfg(not(target_arch = "wasm32"))]
 async fn call_scrolls_sign(tx: &conway::Tx) -> anyhow::Result<conway::Tx> {
     let agent = Agent::builder()
         .with_url("https://ic0.app")
@@ -805,7 +808,11 @@ pub async fn make_transactions(
     // Get the real Schnorr signature from ICP canister.
     // The canister signs tx_body.hash() BEFORE replacing the redeemer, then replaces
     // the dummy redeemer with the actual signature.
+    #[cfg(not(target_arch = "wasm32"))]
     let signed_tx = call_scrolls_sign(&tx).await?;
+    #[cfg(target_arch = "wasm32")]
+    let signed_tx: conway::Tx =
+        anyhow::bail!("ICP canister signing is not available in WASM builds");
 
     // Convert pallas Tx back to cml-chain Transaction for CardanoTx
     let cml_tx = pallas_to_cml_tx(&signed_tx)?;

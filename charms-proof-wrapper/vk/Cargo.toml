@@ -10,3 +10,7 @@ publish = false
 [dependencies]
 bincode = { version = "1.3.3" }
 sp1-sdk = { version = "=6.8.1", default-features = false, features = ["blocking"] }
+
+[profile.test]
+lto = "off"
+opt-level = 1

@@ -9,24 +9,28 @@ FROM ghcr.io/charmsdev/guest-builder:5b1eae7e339ab66544700be56774e6096d45937b
 
 WORKDIR /src
 COPY . .
+
 RUN cd charms-spell-checker \
     && cargo prove build --locked --output-directory=/out \
     && test -s /out/charms-spell-checker \
-    && cargo run --release --locked --manifest-path /src/charms-proof-wrapper/vk/Cargo.toml -- \
+    && rm -rf /src/charms-spell-checker/target
+
+RUN cargo run --profile test --locked --manifest-path /src/charms-proof-wrapper/vk/Cargo.toml -- \
         checker \
         /out/charms-spell-checker \
         /src/charms-proof-wrapper/src/lib.rs \
         /out/charms-spell-checker-vk.bin \
     && test -s /out/charms-spell-checker-vk.bin \
-    && cp /src/charms-proof-wrapper/src/lib.rs /out/charms-proof-wrapper-lib.rs \
-    && cd /src \
-    && cargo prove build --locked -p charms-proof-wrapper --output-directory=/out \
+    && cp /src/charms-proof-wrapper/src/lib.rs /out/charms-proof-wrapper-lib.rs
+
+RUN cargo prove build --locked -p charms-proof-wrapper --output-directory=/out \
     && test -s /out/charms-proof-wrapper \
-    && cargo run --release --locked --manifest-path /src/charms-proof-wrapper/vk/Cargo.toml -- \
+    && rm -rf /src/target
+
+RUN cargo run --profile test --locked --manifest-path /src/charms-proof-wrapper/vk/Cargo.toml -- \
         wrapper \
         /out/charms-proof-wrapper \
         /src/charms-lib/src/lib.rs \
         /out/charms-proof-wrapper-vk.bin \
     && test -s /out/charms-proof-wrapper-vk.bin \
-    && cp /src/charms-lib/src/lib.rs /out/charms-lib.rs \
-    && rm -rf /src/target /src/charms-spell-checker/target /src/charms-proof-wrapper/vk/target
+    && cp /src/charms-lib/src/lib.rs /out/charms-lib.rs

@@ -1,14 +1,11 @@
 # Reproducible RISC-V builds of the charms-spell-checker and charms-proof-wrapper guests.
 #
-# GUEST_BUILDER is the toolchain image, published for linux/amd64 and linux/arm64.
-# The tag is the full commit of the guest-builder branch that published it.
+# The toolchain image is published for linux/amd64 and linux/arm64. The tag is
+# the full commit of the guest-builder branch that published it.
 #
-#   docker build -f charms-spell-checker/Dockerfile \
-#     --build-arg GUEST_BUILDER=ghcr.io/charmsdev/guest-builder:<commit> \
-#     -t charms-guests .
+#   charms-spell-checker/build-guests.sh
 
-ARG GUEST_BUILDER
-FROM ${GUEST_BUILDER} AS build
+FROM ghcr.io/charmsdev/guest-builder:5b1eae7e339ab66544700be56774e6096d45937b
 
 WORKDIR /src
 COPY . .
@@ -33,15 +30,3 @@ RUN cd charms-spell-checker \
     && test -s /out/charms-proof-wrapper-vk.bin \
     && cp /src/charms-lib/src/lib.rs /out/charms-lib.rs \
     && rm -rf /src/target /src/charms-spell-checker/target /src/charms-proof-wrapper/vk/target
-
-FROM ubuntu:24.04
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends file \
-    && rm -rf /var/lib/apt/lists/*
-COPY --from=build /out/charms-spell-checker /opt/charms-spell-checker
-COPY --from=build /out/charms-proof-wrapper /opt/charms-proof-wrapper
-COPY --from=build /out/charms-spell-checker-vk.bin /opt/charms-spell-checker-vk.bin
-COPY --from=build /out/charms-proof-wrapper-vk.bin /opt/charms-proof-wrapper-vk.bin
-COPY --from=build /out/charms-proof-wrapper-lib.rs /opt/charms-proof-wrapper-lib.rs
-COPY --from=build /out/charms-lib.rs /opt/charms-lib.rs
-CMD ["sh", "-c", "file /opt/charms-spell-checker /opt/charms-proof-wrapper"]

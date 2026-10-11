@@ -5,37 +5,18 @@ specifies what charms are created in the transaction outputs.
 
 ### Building
 
-The zkVM toolchain is a separate image, `ghcr.io/charmsdev/guest-builder`.
-It carries Rust 1.96, SP1 6.8.1, and the RISC-V C compiler for `blst` and `secp256k1`.
-Pushes to the `guest-builder` branch publish `linux/amd64` and `linux/arm64`, so Docker
-on Apple Silicon pulls a native image.
-
-Build both guest ELFs from the repository root. `GUEST_BUILDER` is required. The tag is the
-full commit of the `guest-builder` branch that published the image, so a later toolchain
-rebuild keeps these ELFs and verification keys stable:
-
-```sh
-docker build -f charms-spell-checker/Dockerfile \
-  --build-arg GUEST_BUILDER=ghcr.io/charmsdev/guest-builder:<commit> \
-  -t charms-guests .
-```
-
-An image built from `guest-builder.Dockerfile` is passed the same way, by its local name.
+The guest Dockerfile pins a published zkVM toolchain: Rust 1.96, SP1 6.8.1, and the RISC-V C
+compiler for `blst` and `secp256k1`. The image is `linux/amd64` and `linux/arm64`, so Docker
+on Apple Silicon pulls a native image. Pinning that commit keeps these ELFs and verification
+keys stable when the toolchain is rebuilt.
 
 `charms-spell-checker` validates spells. `charms-proof-wrapper` verifies that proof and is the program proved as a
 Groth16 SNARK. The image derives `SPELL_CHECKER_VK` from the spell-checker ELF and writes it into the wrapper before
 that guest is compiled. It also writes both serialized SP1 verifying keys, and writes the wrapper key into
-`charms-lib` as `SPELL_VK`. Copy the ELFs into `src/bin`, where the host crate embeds them, and copy the keys and
-sources back with them. `Prover::new` checks those cached keys against the constants:
+`charms-lib` as `SPELL_VK`. From the repository root, build the image and copy the ELFs into `src/bin`, where the
+host crate embeds them, and copy the keys and sources back with them. `Prover::new` checks those cached keys against
+the constants. The script prints the type of each ELF:
 
 ```sh
-docker run --rm --entrypoint cat charms-guests /opt/charms-spell-checker > src/bin/charms-spell-checker
-docker run --rm --entrypoint cat charms-guests /opt/charms-proof-wrapper > src/bin/charms-proof-wrapper
-docker run --rm --entrypoint cat charms-guests /opt/charms-spell-checker-vk.bin > src/bin/charms-spell-checker-vk.bin
-docker run --rm --entrypoint cat charms-guests /opt/charms-proof-wrapper-vk.bin > src/bin/charms-proof-wrapper-vk.bin
-docker run --rm --entrypoint cat charms-guests /opt/charms-proof-wrapper-lib.rs > charms-proof-wrapper/src/lib.rs
-docker run --rm --entrypoint cat charms-guests /opt/charms-lib.rs > charms-lib/src/lib.rs
-chmod +x src/bin/charms-spell-checker src/bin/charms-proof-wrapper
+charms-spell-checker/build-guests.sh
 ```
-
-`docker run --rm charms-guests` prints the type of each ELF.

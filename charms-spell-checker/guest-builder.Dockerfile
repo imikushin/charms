@@ -9,8 +9,7 @@
 #
 # Build locally (Docker picks the host architecture):
 #   docker build -f charms-spell-checker/guest-builder.Dockerfile -t ghcr.io/charmsdev/guest-builder .
-# Pass that name to the guest Dockerfile as GUEST_BUILDER. A published image is
-# passed by its commit tag.
+# The guest Dockerfile pins a published commit tag of this image.
 
 FROM ubuntu:24.04
 

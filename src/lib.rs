@@ -178,8 +178,9 @@ mod test {
         assert_eq!(pv.as_slice(), input.as_slice());
     }
 
-    #[tokio::test]
-    async fn guest_checks_an_ethereum_source_proof() {
+    // The spell-checker guest asserts this. `programs_run_in_zkvm` covers guest execution.
+    #[test]
+    fn checks_an_ethereum_source_proof() {
         let hex = include_str!("../charms-lib/test/ethereum-spell.hex");
         let Tx::Ethereum(record) = Tx::try_from(hex.trim()).unwrap() else {
             panic!("fixture is an Ethereum record");
@@ -198,25 +199,11 @@ mod test {
             dest: vec![3; 20],
             content: None,
         }]);
-        let input = SpellProverInput {
-            self_spell_vk: SPELL_VK,
-            prev_txs: vec![Tx::Ethereum(record)],
-            spell: claim.clone(),
-            tx_ins_beamed_source_utxos: BTreeMap::new(),
-            app_input: None,
-            scroll_outputs: None,
-        };
-        let mut stdin = SP1Stdin::new();
-        stdin.write_vec(util::write(&input).unwrap());
-        let client = ProverClient::builder().light().build().await;
-        let (pv, _) = client
-            .execute(Elf::Static(SPELL_CHECKER_BINARY), stdin)
-            .await
-            .expect("guest checks the source proof");
-        let (committed_vk, committed_spell): ([u8; 32], NormalizedSpell) =
-            util::read(pv.as_slice()).unwrap();
-        assert_eq!(committed_vk, SPELL_VK);
-        assert_eq!(committed_spell, claim);
+        let prev_txs = vec![Tx::Ethereum(record)];
+        assert!(
+            charms_client::is_correct(&claim, &prev_txs, None, &SPELL_VK, &BTreeMap::new(), None,)
+                .expect("ethereum source proof checks")
+        );
     }
 
     fn ethereum_claim(amount: u64, dest: Vec<u8>) -> (NormalizedSpell, Tx) {

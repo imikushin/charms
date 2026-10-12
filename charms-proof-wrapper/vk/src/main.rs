@@ -111,8 +111,7 @@ mod tests {
     use super::{hex_encode, replace_spell_checker_vk, replace_spell_vk};
 
     const SPELL_CHECKER_VK: [u32; 8] = [
-        594351357, 1129065526, 1335503287, 1134438958, 1095361067, 1699468311, 1887077198,
-        882329457,
+        1074082727, 1976046827, 472615224, 737144855, 409662963, 581914553, 882975872, 928338799,
     ];
 
     #[test]
@@ -135,7 +134,7 @@ mod tests {
     #[test]
     fn spell_vk_replacement_matches_charms_lib_source() {
         let src = include_str!("../../../charms-lib/src/lib.rs");
-        let vk = hex_decode_32("00425796f4c4fa050043eee14d801b4f935244e44aad6a28de0cd5cb3de0ae52");
+        let vk = hex_decode_32("0010f4cf67bc2486066ec3912f4078c2dc59c8650756f96928e2949b5e1251a2");
         assert_eq!(replace_spell_vk(src, &vk), src);
     }
 
@@ -145,11 +144,27 @@ mod tests {
         let vk = [0xab; 32];
         let updated = replace_spell_vk(src, &vk);
         let encoded = hex_encode(&vk);
-        assert!(updated.contains(&format!("hex!(\"{encoded}\")")));
-        assert!(
-            !updated.contains("00425796f4c4fa050043eee14d801b4f935244e44aad6a28de0cd5cb3de0ae52")
-        );
+        let old = spell_vk_hex(src);
+        assert_eq!(spell_vk_hex(&updated), encoded);
+        assert_ne!(old, encoded);
+        assert!(!updated.contains(&old));
         assert_eq!(replace_spell_vk(&updated, &vk), updated);
+    }
+
+    fn spell_vk_hex(src: &str) -> String {
+        let start = src
+            .find("pub const SPELL_VK:")
+            .expect("SPELL_VK constant missing");
+        let hex_open = src[start..]
+            .find("hex!(\"")
+            .expect("SPELL_VK hex literal missing")
+            + start
+            + "hex!(\"".len();
+        let hex_end = src[hex_open..]
+            .find('"')
+            .expect("SPELL_VK hex literal is not closed")
+            + hex_open;
+        src[hex_open..hex_end].to_string()
     }
 
     fn hex_decode_32(hex: &str) -> [u8; 32] {

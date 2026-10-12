@@ -18,14 +18,6 @@ use std::{
 
 use super::get_charms_fee;
 
-pub(crate) fn ensure_no_ethereum_history(prev_txs: &[Tx]) -> anyhow::Result<()> {
-    ensure!(
-        prev_txs.iter().all(|tx| !matches!(tx, Tx::Ethereum(_))),
-        "prev_txs cannot include an Ethereum transaction in this build"
-    );
-    Ok(())
-}
-
 pub fn ensure_exact_app_binaries(
     norm_spell: &NormalizedSpell,
     app_private_inputs: &BTreeMap<App, Data>,
@@ -242,10 +234,18 @@ impl ProveSpellTxImpl {
         prove_request: &mut super::request::ProveRequest,
         scroll_outputs: Option<&SignedScrollOutputs>,
     ) -> anyhow::Result<(u64, bool)> {
+        charms_client::ensure_ethereum_prev_txs_admissible(
+            &prove_request.spell,
+            &prove_request.prev_txs,
+        )?;
+        charms_client::ensure_requested_chain_matches_host(
+            prove_request.chain,
+            &prove_request.spell,
+            &prove_request.prev_txs,
+        )?;
         if prove_request.chain == Chain::Ethereum {
-            bail!("this build does not prove Ethereum spells");
+            charms_client::ethereum_tx::ensure_ethereum_output_coins(&prove_request.spell)?;
         }
-        ensure_no_ethereum_history(&prove_request.prev_txs)?;
         ensure!(
             prove_request.spell.mock == self.mock,
             "cannot prove a mock=={} spell on a mock=={} prover",
@@ -434,7 +434,7 @@ impl ProveSpellTxImpl {
                 tracing::warn!("spell validation for cardano is not yet implemented");
                 Ok((total_cycles, verified))
             }
-            Chain::Ethereum => unreachable!(),
+            Chain::Ethereum => Ok((total_cycles, verified)),
         }
     }
 }
@@ -443,7 +443,9 @@ impl ProveSpellTxImpl {
 mod tests {
     use super::*;
     use crate::spell::{ProveSpellTx, ProveSpellTxImpl};
-    use charms_client::{NormalizedSpell, ethereum_tx::EthereumTx, request::ProveRequest};
+    use charms_client::{
+        NormalizedSpell, ethereum_tx::EthereumTx, request::ProveRequest, tx::EnchantedTx,
+    };
     use std::collections::BTreeMap;
 
     fn ethereum_prev() -> Tx {
@@ -460,10 +462,14 @@ mod tests {
 
     #[test]
     fn ethereum_history_is_rejected_before_proof() {
-        let err = ensure_no_ethereum_history(&[ethereum_prev()]).unwrap_err();
-        assert_eq!(
-            err.to_string(),
-            "prev_txs cannot include an Ethereum transaction in this build"
+        let prev = ethereum_prev();
+        let Tx::Ethereum(record) = &prev else {
+            unreachable!("the fixture is an Ethereum record");
+        };
+        let expected = format!(
+            "Ethereum previous transaction {} is not final and did not \
+             create an input or reference of an Ethereum-hosted spell",
+            record.tx_id()
         );
 
         let prover = ProveSpellTxImpl::new(false);
@@ -473,7 +479,7 @@ mod tests {
             tx_ins_beamed_source_utxos: BTreeMap::new(),
             binaries: BTreeMap::new(),
             app_signatures: BTreeMap::new(),
-            prev_txs: vec![ethereum_prev()],
+            prev_txs: vec![prev],
             change_address: "addr".to_string(),
             fee_rate: 1.0,
             chain: Chain::Cardano,
@@ -482,9 +488,95 @@ mod tests {
         let err = prover
             .validate_prove_request(&mut request, None)
             .unwrap_err();
+        assert_eq!(err.to_string(), expected);
+    }
+
+    fn ethereum_hosted_spell(amount: u64, dest: Vec<u8>) -> (NormalizedSpell, Vec<Tx>) {
+        let mut salt = [0u8; 32];
+        salt[31] = 9;
+        let carried: NormalizedSpell = serde_yaml::from_str(
+            r#"
+version: 16
+tx:
+  outs:
+    - {}
+  coins:
+    - amount: 0
+      dest: "0102030405060708090a0b0c0d0e0f1011121314"
+app_public_inputs: {}
+"#,
+        )
+        .unwrap();
+        let plan = charms_client::ethereum_tx::plan_placeholder(
+            &carried,
+            &charms_client::ethereum_tx::PlaceholderRequest {
+                chain_id: 1,
+                charms: [0x33; 20],
+                caller: [0x11; 20],
+                salt,
+                nonce: None,
+            },
+        )
+        .unwrap();
+        let mut spell = NormalizedSpell::default();
+        spell.tx.ins = Some(vec![charms_data::UtxoId(plan.record.tx_id(), 0)]);
+        spell.tx.outs = vec![charms_client::NormalizedCharms::new()];
+        spell.tx.coins = Some(vec![charms_data::NativeOutput {
+            amount,
+            dest,
+            content: None,
+        }]);
+        (spell, vec![Tx::Ethereum(plan.record)])
+    }
+
+    fn request(spell: NormalizedSpell, prev_txs: Vec<Tx>, chain: Chain) -> ProveRequest {
+        ProveRequest {
+            spell,
+            app_private_inputs: BTreeMap::new(),
+            tx_ins_beamed_source_utxos: BTreeMap::new(),
+            binaries: BTreeMap::new(),
+            app_signatures: BTreeMap::new(),
+            prev_txs,
+            change_address: "addr".to_string(),
+            fee_rate: 1.0,
+            chain,
+            collateral_utxo: None,
+        }
+    }
+
+    #[test]
+    fn an_ethereum_spell_with_a_nonzero_amount_is_rejected_before_proof() {
+        let (spell, prev_txs) = ethereum_hosted_spell(1, vec![1; 20]);
+        let prover = ProveSpellTxImpl::new(false);
+        let mut request = request(spell, prev_txs, Chain::Ethereum);
+        let err = prover
+            .validate_prove_request(&mut request, None)
+            .unwrap_err();
+        assert_eq!(err.to_string(), "coins[0].amount must be 0");
+    }
+
+    #[test]
+    fn an_ethereum_spell_with_a_short_destination_is_rejected_before_proof() {
+        let (spell, prev_txs) = ethereum_hosted_spell(0, vec![1; 19]);
+        let prover = ProveSpellTxImpl::new(false);
+        let mut request = request(spell, prev_txs, Chain::Ethereum);
+        let err = prover
+            .validate_prove_request(&mut request, None)
+            .unwrap_err();
+        assert_eq!(err.to_string(), "coins[0].dest must be a 20-byte address");
+    }
+
+    #[test]
+    fn an_ethereum_hosted_spell_requested_on_cardano_is_rejected() {
+        let (spell, prev_txs) = ethereum_hosted_spell(0, vec![1; 20]);
+        let prover = ProveSpellTxImpl::new(false);
+        let mut request = request(spell, prev_txs, Chain::Cardano);
+        let err = prover
+            .validate_prove_request(&mut request, None)
+            .unwrap_err();
         assert_eq!(
             err.to_string(),
-            "prev_txs cannot include an Ethereum transaction in this build"
+            "spell is hosted on ethereum but the requested chain is cardano"
         );
     }
 }

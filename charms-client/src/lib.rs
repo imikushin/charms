@@ -1,7 +1,7 @@
 use crate::{
     bitcoin_tx::SCROLLS_ADDRS_PUBKEY,
     ethereum_tx::EthereumTx,
-    tx::{EnchantedTx, Tx, by_txid, extended_normalized_spell},
+    tx::{Chain, EnchantedTx, Tx, by_txid, extended_normalized_spell},
 };
 use anyhow::{Context, anyhow, ensure};
 use bitcoin::secp256k1::{Message, Secp256k1, XOnlyPublicKey, schnorr::Signature};
@@ -73,6 +73,9 @@ pub const V13_SPELL_VK: [u8; 32] =
 /// Verification key for version `14` of the protocol implemented by `charms-proof-wrapper` binary.
 pub const V14_SPELL_VK: [u8; 32] =
     hex!("001a2396afb7e376736d9cf82d33c0dec55cb66866bf7f141fdaa92ab70a0506");
+/// Verification key for version `15` of the protocol implemented by `charms-proof-wrapper` binary.
+pub const V15_SPELL_VK: [u8; 32] =
+    hex!("00425796f4c4fa050043eee14d801b4f935244e44aad6a28de0cd5cb3de0ae52");
 
 /// Version `0` of the protocol.
 pub const V0: u32 = 0;
@@ -106,9 +109,11 @@ pub const V13: u32 = 13;
 pub const V14: u32 = 14;
 /// Version `15` of the protocol.
 pub const V15: u32 = 15;
+/// Version `16` of the protocol.
+pub const V16: u32 = 16;
 
 /// Current version of the protocol.
-pub const CURRENT_VERSION: u32 = V15;
+pub const CURRENT_VERSION: u32 = V16;
 
 pub const CHARMS_PROVE_API_URL: &'static str =
     formatcp!("https://v{CURRENT_VERSION}.charms.dev/spells/prove");
@@ -444,6 +449,9 @@ pub fn is_correct(
     scroll_outputs: Option<&SignedScrollOutputs>,
 ) -> anyhow::Result<bool> {
     ensure_ethereum_prev_txs_admissible(spell, prev_txs)?;
+    if hosting_ethereum_record(spell, prev_txs).is_some() {
+        ethereum_tx::ensure_ethereum_output_coins(spell)?;
+    }
     ensure!(beaming_txs_have_finality_proofs(
         prev_txs,
         tx_ins_beamed_source_utxos
@@ -934,7 +942,7 @@ fn spell_input_and_ref_txids(spell: &NormalizedSpell) -> BTreeSet<TxId> {
         .collect()
 }
 
-fn ensure_ethereum_prev_txs_admissible(
+pub fn ensure_ethereum_prev_txs_admissible(
     spell: &NormalizedSpell,
     prev_txs: &[Tx],
 ) -> anyhow::Result<()> {
@@ -962,6 +970,33 @@ fn ensure_ethereum_prev_txs_admissible(
             record.tx_id()
         );
     }
+    Ok(())
+}
+
+/// The transaction that created `spell.tx.ins[0]` is the spell's host.
+/// A request for a different chain cannot be built after proving.
+pub fn ensure_requested_chain_matches_host(
+    chain: Chain,
+    spell: &NormalizedSpell,
+    prev_txs: &[Tx],
+) -> anyhow::Result<()> {
+    let Some(first) = spell.tx.ins.as_ref().and_then(|ins| ins.first()) else {
+        return Ok(());
+    };
+    let Some(host) = prev_txs.iter().find(|tx| tx.tx_id() == first.0) else {
+        return Ok(());
+    };
+    let hosted = match host {
+        Tx::Bitcoin(_) => Chain::Bitcoin,
+        Tx::Cardano(_) => Chain::Cardano,
+        Tx::Ethereum(_) => Chain::Ethereum,
+    };
+    ensure!(
+        chain == hosted,
+        "spell is hosted on {} but the requested chain is {}",
+        hosted.as_ref(),
+        chain.as_ref()
+    );
     Ok(())
 }
 
@@ -1135,7 +1170,7 @@ mod test {
         salt[31] = 7;
         let carried: NormalizedSpell = serde_yaml::from_str(
             r#"
-version: 15
+version: 16
 tx:
   outs:
     - {}

@@ -5,7 +5,7 @@
 #
 #   charms-spell-checker/build-guests.sh
 
-FROM ghcr.io/charmsdev/guest-builder:5b1eae7e339ab66544700be56774e6096d45937b
+FROM ghcr.io/charmsdev/guest-builder:c2f5460e6453b8f5aed67528b380e4b4b7d32e0e
 
 WORKDIR /src
 COPY . .
@@ -15,7 +15,7 @@ RUN cd charms-spell-checker \
     && test -s /out/charms-spell-checker \
     && rm -rf /src/charms-spell-checker/target
 
-RUN cargo run --profile test --locked --manifest-path /src/charms-proof-wrapper/vk/Cargo.toml -- \
+RUN spell-checker-vk \
         checker \
         /out/charms-spell-checker \
         /src/charms-proof-wrapper/src/lib.rs \
@@ -27,7 +27,7 @@ RUN cargo prove build --locked -p charms-proof-wrapper --output-directory=/out \
     && test -s /out/charms-proof-wrapper \
     && rm -rf /src/target
 
-RUN cargo run --profile test --locked --manifest-path /src/charms-proof-wrapper/vk/Cargo.toml -- \
+RUN spell-checker-vk \
         wrapper \
         /out/charms-proof-wrapper \
         /src/charms-lib/src/lib.rs \

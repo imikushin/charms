@@ -57,7 +57,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: charms-spell-checker/guest-builder.Dockerfile
+          file: charms-proof-wrapper/guest-builder.Dockerfile
           platforms: ${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=guest-builder-${{ env.PLATFORM_PAIR }}

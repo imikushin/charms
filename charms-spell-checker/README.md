@@ -5,10 +5,7 @@ specifies what charms are created in the transaction outputs.
 
 ### Building
 
-The guest Dockerfile pins a published zkVM toolchain: Rust 1.96, SP1 6.8.1, and the RISC-V C
-compiler for `blst` and `secp256k1`. The image is `linux/amd64` and `linux/arm64`, so Docker
-on Apple Silicon pulls a native image. Pinning that commit keeps these ELFs and verification
-keys stable when the toolchain is rebuilt.
+The guest Dockerfile pins a published zkVM toolchain.
 
 `charms-spell-checker` validates spells. `charms-proof-wrapper` verifies that proof and is the program proved as a
 Groth16 SNARK. The image derives `SPELL_CHECKER_VK` from the spell-checker ELF and writes it into the wrapper before

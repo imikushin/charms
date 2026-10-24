@@ -61,17 +61,17 @@ pallas-codec = { version = "1.4.0" }
 pallas-crypto = { version = "1.4.0" }
 pallas-primitives = { version = "1.4.0" }
 pallas-txbuilder = { version = "1.4.0" }
-proptest = { version = "1.11.0" }
+proptest = { version = "1.12.0" }
 proptest-derive = { version = "0.8.0" }
 serde = { version = "1.0" }
-serde_json = { version = "1.0.151" }
+serde_json = { version = "1.0.154" }
 serde_yaml = { version = "0.9.34" }
 sha2 = { version = "0.10.9" }
-sp1-primitives = { version = "6.8.1" }
-sp1-prover = { version = "6.8.1" }
-sp1-sdk = { version = "6.8.1", default-features = false, features = ["network"] }
-sp1-verifier = { version = "6.8.1", default-features = false }
-sp1-zkvm = { version = "6.8.1" }
+sp1-primitives = { version = "6.10.0" }
+sp1-prover = { version = "6.10.0" }
+sp1-sdk = { version = "6.10.0", default-features = false, features = ["network"] }
+sp1-verifier = { version = "6.10.0", default-features = false }
+sp1-zkvm = { version = "6.10.0" }
 test-strategy = { version = "0.4.5" }
 tracing = { version = "0.1" }
 
@@ -125,8 +125,8 @@ serde_yaml = { workspace = true }
 sha2 = { workspace = true }
 sp1-prover = { workspace = true }
 sp1-sdk = { workspace = true }
-tokio = { version = "1.53", features = ["full"] }
-toml = { version = "1.1.6" }
+tokio = { version = "1.54", features = ["full"] }
+toml = { version = "1.1.8" }
 tower-http = { version = "0.6.11", features = ["cors"] }
 tracing = { workspace = true }
 tracing-forest = { version = "0.3.1" }

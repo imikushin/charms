@@ -13,7 +13,7 @@ license = "MIT"
 # Guest build leaves wasmi validation off. A panic fails the proof.
 charms-client = { path = "../charms-client", version = "16.0.0", default-features = false }
 charms-data = { path = "../charms-data", version = "16.0.0" }
-sp1-zkvm = { version = "6.8.1", features = ["verify"] }
+sp1-zkvm = { version = "6.10.0", features = ["verify"] }
 
 [profile.release]
 codegen-units = 1
@@ -22,5 +22,6 @@ strip = "debuginfo"
 overflow-checks = true
 
 [patch.crates-io]
-secp256k1 = { git = "https://github.com/sp1-patches/rust-secp256k1", tag = "patch-0.29.1-sp1-6.2.0" }
-sha2 = { git = "https://github.com/sp1-patches/RustCrypto-hashes", package = "sha2", tag = "patch-sha2-0.10.9-sp1-6.2.0" }
+secp256k1 = { git = "https://github.com/sp1-patches/rust-secp256k1", tag = "patch-0.29.1-sp1-6.10.0" }
+sha2 = { git = "https://github.com/sp1-patches/RustCrypto-hashes", package = "sha2", tag = "patch-sha2-0.10.9-sp1-6.10.0" }
+sha3 = { git = "https://github.com/sp1-patches/RustCrypto-hashes", package = "sha3", tag = "patch-sha2-0.10.8-sp1-6.10.0" }

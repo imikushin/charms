@@ -4,7 +4,7 @@
 # The tag is that push's full commit:
 #   ghcr.io/charmsdev/guest-builder:<commit>
 #
-# SP1 6.8.1 matches sp1-zkvm. Ubuntu's clang and the RISC-V gcc from
+# SP1 version matches sp1-zkvm. Ubuntu's clang and the RISC-V gcc from
 # `sp1up --c-toolchain` compile blst and secp256k1 for the spell checker.
 # spell-checker-vk is built from charms-proof-wrapper/vk against that same
 # sp1-sdk and installed at /usr/local/bin/spell-checker-vk.
@@ -40,7 +40,7 @@ RUN curl --proto '=https' --tlsv1.2 --retry 10 --retry-connrefused -fsSL https:/
         | sh -s -- -y --default-toolchain 1.96 --profile minimal
 
 RUN curl -fsSL https://sp1up.succinct.xyz | bash \
-    && sp1up -v 6.8.1 -c \
+    && sp1up -v 6.10.0 -c \
     && rustup toolchain list \
     && cargo prove --version \
     && riscv64-unknown-elf-gcc --version

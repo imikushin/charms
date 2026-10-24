@@ -23,7 +23,7 @@ contract Deploy is Script {
     uint32 public constant SPELL_VERSION = 16;
     /// @dev `charms-lib`'s `SPELL_VK`.
     bytes32 public constant PROGRAM_VKEY =
-        0x0060f1593d80473ff16c56a15c9042aa0e61fe54d8ec34638853dc4946f25d3e;
+        0x00c70dad82bf2e8dfce7bfdeba9016aaadcd20cea79f3950af9c1dae74e3fb95;
     /// @dev SHA-256 of the Groth16 verifying key. Same value as `$.sp1.groth16VkHash`.
     bytes32 public constant GROTH16_VK_HASH =
         0x4388a21c687fdd5f218d7e3d13190cac4c5355818d3605fd5fb811df468ee696;

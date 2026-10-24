@@ -5,7 +5,7 @@
 #
 #   charms-spell-checker/build-guests.sh
 
-FROM ghcr.io/charmsdev/guest-builder:c2f5460e6453b8f5aed67528b380e4b4b7d32e0e
+FROM ghcr.io/charmsdev/guest-builder:f5c1771cf6b1f5094b8c812ab8f30fe762f16da7
 
 WORKDIR /src
 COPY . .

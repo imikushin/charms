@@ -111,7 +111,7 @@ mod tests {
     use super::{hex_encode, replace_spell_checker_vk, replace_spell_vk};
 
     const SPELL_CHECKER_VK: [u32; 8] = [
-        1074082727, 1976046827, 472615224, 737144855, 409662963, 581914553, 882975872, 928338799,
+        141320785, 62271645, 1747835513, 1187188, 34979517, 116377289, 683608139, 1178051858,
     ];
 
     #[test]
@@ -134,7 +134,7 @@ mod tests {
     #[test]
     fn spell_vk_replacement_matches_charms_lib_source() {
         let src = include_str!("../../../charms-lib/src/lib.rs");
-        let vk = hex_decode_32("0010f4cf67bc2486066ec3912f4078c2dc59c8650756f96928e2949b5e1251a2");
+        let vk = hex_decode_32("00c70dad82bf2e8dfce7bfdeba9016aaadcd20cea79f3950af9c1dae74e3fb95");
         assert_eq!(replace_spell_vk(src, &vk), src);
     }
 

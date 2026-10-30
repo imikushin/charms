@@ -270,11 +270,6 @@ pub struct SpellProveParams {
     )]
     max_priority_fee_per_gas: Option<u128>,
 
-    /// Value in wei for `--tx-format unsigned-tx`. Defaults to 0 when that format is selected.
-    /// Ethereum only. Not accepted with `--tx-format record`.
-    #[arg(long)]
-    value: Option<u128>,
-
     /// Use mock mode (skip proof generation).
     #[arg(long, default_value = "false", hide_env = true)]
     mock: bool,
@@ -387,7 +382,7 @@ pub enum SpellCommands {
     /// The hex is the Charms record. `tx build` encodes that hex into the signable call.
     /// `--tx-format unsigned-tx` prints one 0x-prefixed unsigned type-2 transaction instead.
     /// That form needs `--nonce`, `--gas-limit`, `--max-fee-per-gas`, and
-    /// `--max-priority-fee-per-gas`. `--value` defaults to 0.
+    /// `--max-priority-fee-per-gas`. The transaction value is 0.
     /// `--output` is the prover payload encoding and does not select this format.
     /// An empty Ethereum UTXO does not call the prover and does not take `--prev-txs`.
     #[command(after_long_help = SPELL_DATA_HELP)]
@@ -1077,7 +1072,6 @@ app_public_inputs: {}
                 "1",
                 "--max-priority-fee-per-gas requires --chain ethereum",
             ),
-            ("--value", "0", "--value requires --chain ethereum"),
         ];
         for chain in ["bitcoin", "cardano"] {
             let cli = Cli::try_parse_from([

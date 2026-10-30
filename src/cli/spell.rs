@@ -414,7 +414,6 @@ fn reject_ethereum_only_options(params: &SpellProveParams) -> Result<()> {
         params.max_priority_fee_per_gas.is_none(),
         "--max-priority-fee-per-gas requires --chain ethereum"
     );
-    ensure!(params.value.is_none(), "--value requires --chain ethereum");
     Ok(())
 }
 
@@ -435,7 +434,6 @@ fn ethereum_unsigned_fees(
                 "--max-priority-fee-per-gas",
                 params.max_priority_fee_per_gas.is_some(),
             ),
-            ("--value", params.value.is_some()),
         ] {
             ensure!(!set, "{flag} requires --tx-format unsigned-tx");
         }
@@ -458,7 +456,6 @@ fn ethereum_unsigned_fees(
         gas_limit: params
             .gas_limit
             .context("--gas-limit is required for --tx-format unsigned-tx")?,
-        value: params.value.unwrap_or(0),
     }))
 }
 

@@ -88,7 +88,8 @@ pub fn empty_ethereum_spell() -> NormalizedSpell {
 /// Chain id, destination, and calldata of one Ethereum transaction.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DecodedEthereumCall {
-    pub chain_id: u64,
+    /// `None` for a legacy transaction signed without EIP-155.
+    pub chain_id: Option<u64>,
     /// `None` when the transaction creates a contract.
     pub to: Option<[u8; 20]>,
     pub input: Vec<u8>,
@@ -101,13 +102,13 @@ pub struct Eip1559Fee {
     pub max_priority_fee_per_gas: u128,
     pub max_fee_per_gas: u128,
     pub gas_limit: u64,
-    pub value: u128,
 }
 
 /// Unsigned type-2 transaction whose calldata is [`ethereum_tx::transact_call`] for `record`.
 ///
-/// `to` is the record's Charms proxy. The `signatures` array in the calldata stays empty,
-/// the same as [`ethereum_tx::transact_call`] builds it today.
+/// `to` is the record's Charms proxy. The value is 0 because `transact` is not payable.
+/// The `signatures` array in the calldata stays empty, the same as
+/// [`ethereum_tx::transact_call`] builds it today.
 pub fn unsigned_transact_eip1559(record: &EthereumTx, fee: &Eip1559Fee) -> Result<Vec<u8>> {
     let call = ethereum_tx::transact_call(record)?;
     let input = hex::decode(strip_0x(call.data.trim())).context("transact calldata hex")?;
@@ -118,7 +119,7 @@ pub fn unsigned_transact_eip1559(record: &EthereumTx, fee: &Eip1559Fee) -> Resul
         max_fee_per_gas: fee.max_fee_per_gas,
         max_priority_fee_per_gas: fee.max_priority_fee_per_gas,
         to: TxKind::Call(Address::from(record.charms)),
-        value: U256::from(fee.value),
+        value: U256::ZERO,
         access_list: Default::default(),
         input: Bytes::from(input),
     };
@@ -314,7 +315,7 @@ fn b32(word: alloy_primitives::B256) -> B32 {
 
 fn call_parts(chain_id: Option<u64>, to: TxKind, input: &Bytes) -> Result<DecodedEthereumCall> {
     Ok(DecodedEthereumCall {
-        chain_id: chain_id.context("legacy transaction has no chain id")?,
+        chain_id,
         to: match to {
             TxKind::Call(addr) => Some(addr.into_array()),
             TxKind::Create => None,
@@ -548,7 +549,6 @@ mod tests {
             max_priority_fee_per_gas: 1_000_000,
             max_fee_per_gas: 2_000_000_000,
             gas_limit: 500_000,
-            value: 0,
         };
         let mut raw = Vec::new();
         TxEip1559 {
@@ -558,7 +558,7 @@ mod tests {
             max_fee_per_gas: fee.max_fee_per_gas,
             max_priority_fee_per_gas: fee.max_priority_fee_per_gas,
             to: TxKind::Call(Address::from([0x33; 20])),
-            value: U256::from(fee.value),
+            value: U256::ZERO,
             access_list: Default::default(),
             input: Bytes::from(data.clone()),
         }
@@ -652,7 +652,7 @@ mod tests {
                 "{hash} keccak"
             );
             let call = decode_ethereum_call(&raw).unwrap();
-            assert_eq!(call.chain_id, 1, "{hash} chain id");
+            assert_eq!(call.chain_id, Some(1), "{hash} chain id");
             let to = call.to.expect("destination");
             assert_eq!(hex::encode(to), to_hex, "{hash} to");
             let spell = spell_from_raw_transaction(&raw).unwrap();
@@ -668,7 +668,7 @@ mod tests {
             }
             let cbor = util::write(&spell).unwrap();
             assert_eq!(cbor, event_spell, "{hash} spell bytes");
-            let tx_id = ethereum_tx::eth_tx_id(call.chain_id, &to, Some(anchor), &cbor);
+            let tx_id = ethereum_tx::eth_tx_id(call.chain_id.unwrap(), &to, Some(anchor), &cbor);
             assert_eq!(tx_id.as_slice(), topic1.as_slice(), "{hash} tx id");
         }
     }
@@ -729,7 +729,7 @@ mod tests {
         );
         let raw = legacy.into_signed(signature).encoded_2718();
         let call = decode_ethereum_call(&raw).unwrap();
-        assert_eq!(call.chain_id, 1);
+        assert_eq!(call.chain_id, Some(1));
         assert_eq!(call.to, Some(to.into_array()));
         assert_eq!(
             spell_from_raw_transaction(&raw).unwrap(),
@@ -751,7 +751,54 @@ mod tests {
             spell_from_raw_transaction(&raw).unwrap(),
             empty_ethereum_spell()
         );
-        assert_eq!(decode_ethereum_call(&raw).unwrap().chain_id, 1);
+        assert_eq!(decode_ethereum_call(&raw).unwrap().chain_id, Some(1));
+    }
+
+    #[test]
+    fn a_pre_eip155_legacy_transaction_decodes_without_a_chain_id() {
+        let to = Address::from([0x44; 20]);
+        let signature = Signature::from_scalars_and_parity(
+            alloy_primitives::B256::from([0x11; 32]),
+            alloy_primitives::B256::from([0x22; 32]),
+            false,
+        );
+        let transact = TxLegacy {
+            chain_id: None,
+            nonce: 3,
+            gas_price: 1,
+            gas_limit: 21_000,
+            to: TxKind::Call(to),
+            value: U256::ZERO,
+            input: Bytes::from(
+                ethereum_tx::transact_calldata(&empty_spell_with_one_output(), [1; 32], &[])
+                    .unwrap(),
+            ),
+        };
+        let raw = transact.into_signed(signature).encoded_2718();
+        let call = decode_ethereum_call(&raw).unwrap();
+        assert_eq!(call.chain_id, None);
+        assert_eq!(call.to, Some(to.into_array()));
+        assert_eq!(
+            spell_from_raw_transaction(&raw).unwrap(),
+            empty_spell_with_one_output()
+        );
+
+        let transfer = TxLegacy {
+            chain_id: None,
+            nonce: 4,
+            gas_price: 1,
+            gas_limit: 21_000,
+            to: TxKind::Call(to),
+            value: U256::ZERO,
+            input: Bytes::from(transferCall::SELECTOR.to_vec()),
+        };
+        let raw = transfer.into_signed(signature).encoded_2718();
+        let call = decode_ethereum_call(&raw).unwrap();
+        assert_eq!(call.chain_id, None);
+        assert_eq!(
+            spell_from_raw_transaction(&raw).unwrap(),
+            empty_ethereum_spell()
+        );
     }
 
     fn empty_spell_with_one_output() -> NormalizedSpell {
